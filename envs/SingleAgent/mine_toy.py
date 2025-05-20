@@ -77,6 +77,7 @@ class EpMineEnv(gym.Env):
         if self.env is not None:
             self.env.close()
         worker_id = sd
+        # 如果端口被占用，则增加worker_id
         while IsOpen(self.port+worker_id):
             worker_id += 1
         self.env = UnityEnvironment(file_name=self.env_file_name,
@@ -127,26 +128,27 @@ class EpMineEnv(gym.Env):
         return final_reward
     
     def step(self, action):
-        # 如果是数组而不是单一动作，提取第一个动作
-        if isinstance(action, np.ndarray) and action.shape:
-            action = action[0]
-        
         # 将离散动作转换为连续动作向量
-        # 这里根据您的环境需求进行调整
         if isinstance(action, (int, np.integer)):
             # 离散动作到连续动作的映射
             action_map = {
-                0: [1.0, 0.0, 0.0, 10.0, 1.0],  # 前进
-                1: [-1.0, 0.0, 0.0, 10.0, 1.0], # 后退
-                2: [0.0, 1.0, 0.0, 10.0, 1.0],  # 右转
-                3: [0.0, -1.0, 0.0, 10.0, 1.0]  # 左转
+                0: [1.0, 0.0, 0.0],  # 前进
+                1: [-1.0, 0.0, 0.0], # 后退
+                2: [0.0, 1.0, 0.0],  # 右转
+                3: [0.0, -1.0, 0.0]  # 左转
             }
-            action_vec = action_map[action]
+            continuous_action = action_map[action]
         else:
-            action_vec = action
+            continuous_action = action
         
-        action = ActionTuple(np.array([action_vec], dtype=np.float32))
-        action_dict = warp_action(action=action)
+        # 添加手臂角度和抓取动作
+        continuous_action = [continuous_action[0], continuous_action[1], continuous_action[2], 10.0, 1.0]
+        
+        # 创建ActionTuple并向环境发送动作
+        action_tuple = ActionTuple(np.array([continuous_action], dtype=np.float32))
+        action_dict = warp_action(action=action_tuple)
+        
+        # 执行动作
         total_reward = 0.0
         obs = None
         done = False
@@ -157,9 +159,9 @@ class EpMineEnv(gym.Env):
             total_reward += reward
             if done:
                 break
-            
+        
         self.step_num += 1
-        # 适应Gymnasium的新API，返回terminated和truncated
+        
         terminated = done
         truncated = (self.step_num >= self.max_episode_length)
         
@@ -243,24 +245,11 @@ class EpMineEnv(gym.Env):
     def render(self):
         if self.render_mode == "rgb_array":
             return self._render_frame()
-    
+           
     def _render_frame(self):
         # Implementation of _render_frame method
         pass
-
-def main():
-    env = EpMineEnv(port=3000)
-    obs = env.reset()
-    done = False
-    step = 0
-    while not done:
-        print(time.time())
-        action = env.action_space.sample()
-        obs, reward, done, info = env.step(action)
-        position = info["robot_position"]
-        cv.imwrite("images/{}-({}, {}).png".format(step, position[0], position[2]), obs)
-        print('----------------------------------------')
-        step += 1
-
-if __name__ == '__main__':
-    main()
+    
+    def close(self):
+        if self.env is not None:
+            self.env.close()

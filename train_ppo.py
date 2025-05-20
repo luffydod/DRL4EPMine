@@ -1,5 +1,3 @@
-import gymnasium as gym
-import numpy as np
 import os
 import argparse
 
@@ -16,7 +14,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="PPO运行参数")
     
     parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
-    parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test)")
+    parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_render)")
     
     return parser.parse_args()
 
@@ -104,7 +102,33 @@ def test(args, config):
     obs = env.reset()
     for _ in range(1000):
         action, _states = model.predict(obs)
-        obs, rewards, dones, info = env.step(action)
+        obs, rewards, terminated, truncated, info = env.step(action)
+        dones = terminated or truncated
+
+def test_render(args, config):
+    import time 
+    import cv2 as cv
+    
+    img_path = "images"
+    os.makedirs(img_path, exist_ok=True)
+    
+    env = EpMineEnv(port=30001, no_graph=False, render_mode="human")
+    obs = env.reset()
+    done = False
+    step = 0
+    while not done:
+        print(time.time())
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        position = info["robot_position"]
+        cv.imwrite("{}/{}-({}, {}).png".format(img_path, step, position[0], position[2]), obs)
+        print('----------------------------------------')
+        step += 1
+        if step > 1000:
+            break
+    env.close()
+        
 
 if __name__ == "__main__":
     # 获取默认配置
@@ -117,5 +141,7 @@ if __name__ == "__main__":
         train(args, config)
     elif args.action == "test":
         test(args, config)
+    elif args.action == "test_render":
+        test_render(args, config)
     else:
         raise ValueError(f"无效的运行模式: {args.action}")
