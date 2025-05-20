@@ -8,4 +8,8 @@ __pycache__
 
 *.log
 
+envs/SingleAgent/mine_toy_origin.py
 MineField_Windows-0510-random
+MineField_Linux-0510-random
+models
+logs

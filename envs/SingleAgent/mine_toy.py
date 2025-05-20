@@ -24,6 +24,7 @@ def IsOpen(port, ip='127.0.0.1'):
 
 TEAM_NAME = 'ControlEP?team=0'
 AGENT_ID = 0
+IMAGE_SIZE = 84
 
 def warp_action(action):
     action_dict = {'{}_{}'.format(TEAM_NAME, AGENT_ID): action}
@@ -31,7 +32,6 @@ def warp_action(action):
 
 class EpMineEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
-
     def __init__(self,
                  file_name: str = "MineField_Windows-0510-random/drl.exe",
                  port: Optional[int] = 30001,
@@ -68,7 +68,7 @@ class EpMineEnv(gym.Env):
         self.catch_state = 0
         
         self.observation_space = spaces.Box(
-            low=0, high=255, shape=(84, 84, 3), dtype=np.uint8
+            low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
         )
         
         self.action_space = spaces.Discrete(4)
@@ -206,7 +206,7 @@ class EpMineEnv(gym.Env):
         img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
         
         # 调整图像大小以匹配观察空间
-        img = cv.resize(img, (84, 84))
+        img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
         
         rotation = org_obs[1][AGENT_ID][0:4]
         position = org_obs[1][AGENT_ID][4:7]

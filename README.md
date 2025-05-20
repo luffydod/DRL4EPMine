@@ -23,6 +23,29 @@ pip install mlagents-envs
 
 ```
 
+### linux端配置
+
+(1) opencv-python系统依赖缺失
+
+```bash
+# error
+File "/workspace/drl_ep/envs/singleAgent/mine_toy.py", line 9, 
+    in <module> import cv2 as cv 
+    ImportError: libGL.so.1: cannot open shared object file: No such file or directory
+
+# 解决
+apt install libgl1
+```
+
+(2)
+
+```bash
+# error
+mlagents_envs.exception.UnityEnvironmentException: Error when trying to launch environment - make sure permissions are set correctly
+# 解决
+chmod -R 775 MineField_Linux-0510-random/drl.x86_64
+```
+
 ### 使用本地环境（有显示器）
 
 ```bash

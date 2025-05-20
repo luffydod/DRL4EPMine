@@ -1,43 +1,121 @@
 import gymnasium as gym
 import numpy as np
+import os
+import argparse
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.callbacks import CheckpointCallback
 from envs.SingleAgent.mine_toy import EpMineEnv
 
-def make_env(env_id, rank, seed=0):
-    """
-    Utility function for multiprocessed env.
+from config import PPOConfig
 
-    :param env_id: (str) the environment ID
-    :param num_env: (int) the number of environments you wish to have in subprocesses
-    :param seed: (int) the inital seed for RNG
-    :param rank: (int) index of the subprocess
-    """
-    def _init():
-        env = gym.make(env_id)
-        env.reset(seed=seed + rank)
-        return env
-    set_random_seed(seed)
-    return _init
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="PPO运行参数")
+    
+    parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
+    parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test)")
+    
+    return parser.parse_args()
 
-if __name__ == "__main__":
-    env_id = "EpMineEnv-v0"
-    num_cpu = 1  # Number of processes to use
-    # Create the vectorized environment
-    # env = SubprocVecEnv([make_env(env_id, i) for i in range(num_cpu)])
+def train(args, config):
+    # 确保目录存在
+    os.makedirs(config.save_path, exist_ok=True)
+    os.makedirs(config.log_path, exist_ok=True)
+    
+    # 创建向量化环境
+    env = make_vec_env(
+        config.env_id, 
+        n_envs=config.num_envs, 
+        seed=config.seed, 
+        vec_env_cls=DummyVecEnv,
+        env_kwargs={
+            "file_name": config.file_name,
+            "no_graph": True
+        }
+    )
+    
+    # 设置保存模型的回调
+    checkpoint_callback = CheckpointCallback(
+        save_freq=config.save_freq,
+        save_path=config.save_path,
+        name_prefix=f"{config.env_id}_{config.policy}"
+    )
+    
+    # 创建PPO模型
+    model = PPO(
+        config.policy, 
+        env, 
+        learning_rate=config.learning_rate,
+        n_steps=config.n_steps,
+        batch_size=config.batch_size,
+        n_epochs=config.n_epochs,
+        gamma=config.gamma,
+        gae_lambda=config.gae_lambda,
+        clip_range=config.clip_range,
+        ent_coef=config.ent_coef,
+        vf_coef=config.vf_coef,
+        max_grad_norm=config.max_grad_norm,
+        verbose=config.verbose,
+        device=args.device
+    )
+    
+    # 训练模型
+    model.learn(
+        total_timesteps=config.total_timesteps,
+        callback=checkpoint_callback
+    )
+    
+    # 保存最终模型
+    final_model_path = os.path.join(config.save_path, f"{config.env_id}_{config.policy}_final")
+    model.save(final_model_path)
+    print(f"模型已保存至: {final_model_path}")
 
-    # Stable Baselines provides you with make_vec_env() helper
-    # which does exactly the previous steps for you.
-    # You can choose between `DummyVecEnv` (usually faster) and `SubprocVecEnv`
-    env = make_vec_env(env_id, n_envs=num_cpu, seed=0, vec_env_cls=DummyVecEnv)
-    # env = gym.make("EpMineEnv-v0")
-    model = PPO("CnnPolicy", env, verbose=1)
-    model.learn(total_timesteps=1e6)
-
+def test(args, config):
+    # 创建环境
+    env = EpMineEnv(
+        file_name=config.file_name,
+        no_graph=False,
+        render_mode="human"
+    )
+    # 创建PPO模型
+    model = PPO(
+        config.policy, 
+        env, 
+        learning_rate=config.learning_rate,
+        n_steps=config.n_steps,
+        batch_size=config.batch_size,
+        n_epochs=config.n_epochs,
+        gamma=config.gamma,
+        gae_lambda=config.gae_lambda,
+        clip_range=config.clip_range,
+        ent_coef=config.ent_coef,
+        vf_coef=config.vf_coef,
+        max_grad_norm=config.max_grad_norm,
+        verbose=config.verbose,
+        device=args.device
+    )
+    # load model
+    model.load(os.path.join(config.save_path, f"{config.env_id}_{config.policy}_final"))
+    # 测试模型
+    print("开始测试模型...")
     obs = env.reset()
     for _ in range(1000):
         action, _states = model.predict(obs)
         obs, rewards, dones, info = env.step(action)
+
+if __name__ == "__main__":
+    # 获取默认配置
+    config = PPOConfig()
+    
+    # 解析命令行参数
+    args = parse_args()
+    
+    if args.action == "train":
+        train(args, config)
+    elif args.action == "test":
+        test(args, config)
+    else:
+        raise ValueError(f"无效的运行模式: {args.action}")
