@@ -74,8 +74,7 @@ class EpMineEnv(gym.Env):
         self.action_space = spaces.Discrete(4)
     
     def seed(self, sd=0):
-        if self.env is not None:
-            self.env.close()
+        self.close()
         worker_id = sd
         # 如果端口被占用，则增加worker_id
         while IsOpen(self.port+worker_id):
