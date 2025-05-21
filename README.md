@@ -46,6 +46,59 @@ mlagents_envs.exception.UnityEnvironmentException: Error when trying to launch e
 chmod -R 775 MineField_Linux-0510-random/drl.x86_64
 ```
 
+### docker记录
+
+容器创建，
+
+```bash
+docker run -itd \
+  -p 50004:80 \
+  --security-opt seccomp=unconfined \
+  --shm-size=512m \
+  --gpus all \
+  -v /home/disk/sdb/one/zwb/workspace:/workspace:rw \
+  --name demo1 \
+  novnc_torch:ep.mine
+
+```
+
+一些依赖配置问题，
+
+```bash
+
+# protobuf依赖降版本问题，原有操作似乎重装不干净
+
+# 先手动卸载
+rm -rf /usr/local/lib/python3.12/dist-packages/google/protobuf
+
+# 重装
+pip install --no-cache-dir --break-system-packages protobuf==3.20.3
+```
+
+运行指令，环境变量
+
+```bash
+# 修复 XDG_RUNTIME_DIR 错误
+# 创建用户运行时目录（临时修复）
+sudo mkdir -p /run/user/$(id -u)  # 需 root 权限创建
+
+# 配置
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+
+# 设置目录所有者（替换为你的实际用户名） 
+chown $(whoami):$(whoami) /run/user/$(id -u)
+
+export XAUTHORITY=$HOME/.Xauthority
+
+```
+
+运行程序
+
+```bash
+# 挂载目录权限问题，暂时用sudo解决
+sudo python3 train_ppo.py
+```
+
 ### 关闭可视化界面
 
 mlagents-envs提供了`no-graphics`仿真模式，但是在该模式下图像不会被正常渲染。

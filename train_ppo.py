@@ -125,7 +125,7 @@ def test_render(args, config):
     os.makedirs(img_path, exist_ok=True)
     
     try:
-        env = EpMineEnv(port=30001, no_graph=False, render_mode="human")
+        env = EpMineEnv(file_name=config.file_name, port=30001, no_graph=False, render_mode="human")
         obs = env.reset()
         done = False
         step = 0
