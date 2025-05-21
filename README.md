@@ -14,30 +14,36 @@
 
 ## 环境配置
 
-### Windows端
+### MindSpore
+
+(1) in docker
 
 ```bash
-pip install stable-baselines3[extra]
-# 注意这个包安装后可能需要降级 protobuf==3.20.3
-pip install mlagents-envs
+docker run -it -e DISPLAY=:0 -v /home/disk/sdb/one/lhh/rl:/work/code --network host --runtime=nvidia --privileged --entrypoint /bin/bash docker.mybacc.com/haoranlee/mine_visual_gpu:v0
 
+pip install protobuf==3.13.0 scipy==1.5.4
+
+pip install asttokens==2.0.4
+
+pip install --ignore-installed pyyaml==6.0
+
+pip install https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.1.0/MindSpore/unified/x86_64/mindspore-2.1.0-cp38-cp38-linux_x86_64.whl
+
+pip install https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.1.0/Reinforcement/x86_64/mindspore_rl-0.7.0-py3-none-linux_x86_64.whl
+
+cd code/EpMineEnv/
+
+python train_ppo_new.py
 ```
 
-### linux端配置
+(2) ppo code [here](https://github.com/mindspore-lab/mindrl/blob/master/mindspore_rl/algorithm/ppo/)
 
-(1) opencv-python系统依赖缺失
+(3) config: `EpMineEnv.yaml`, `PPO.yaml`
+[reference](https://github.com/mindspore-lab/mindrl/blob/master/mindspore_rl/utils/utils.py)
 
-```bash
-# error
-File "/workspace/drl_ep/envs/singleAgent/mine_toy.py", line 9, 
-    in <module> import cv2 as cv 
-    ImportError: libGL.so.1: cannot open shared object file: No such file or directory
+(4) [gym-](https://github.com/mindspore-lab/mindrl/tree/master/mindspore_rl/environment)
 
-# 解决
-apt install libgl1
-```
-
-(2)
+(5) [ppo-example](https://github.com/mindspore-lab/mindrl/tree/master/example/ppo)
 
 ```bash
 # error
