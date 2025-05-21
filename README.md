@@ -56,7 +56,7 @@ docker run -itd \
   --security-opt seccomp=unconfined \
   --shm-size=512m \
   --gpus all \
-  -v /home/disk/sdb/one/zwb/workspace:/workspace:rw \
+  -v /home/disk/sdb/one/zwb/workspace:/home/ubuntu/workspace \
   --name demo1 \
   novnc_torch:ep.mine
 
@@ -90,12 +90,13 @@ chown $(whoami):$(whoami) /run/user/$(id -u)
 
 export XAUTHORITY=$HOME/.Xauthority
 
+# 【已解决】 添加到 ~/.bashrc
 ```
 
 运行程序
 
 ```bash
-# 挂载目录权限问题，暂时用sudo解决
+# 【已解决】挂载目录权限问题，暂时用sudo解决
 sudo python3 train_ppo.py
 ```
 
