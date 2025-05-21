@@ -71,7 +71,12 @@ class EpMineEnv(gym.Env):
             low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
         )
         
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Box(
+            low=np.array([-10.0, -10.0, -3.0], dtype=np.float32), 
+            high=np.array([10.0, 10.0, 3.0], dtype=np.float32), 
+            shape=(3,), 
+            dtype=np.float32
+        )
     
     def seed(self, sd=0):
         self.close()
@@ -120,6 +125,7 @@ class EpMineEnv(gym.Env):
     
     def get_dense_reward(self, results):
         final_reward = results[TEAM_NAME].reward[AGENT_ID]
+        # print(f"final_reward: {final_reward}")
         current_dist = self.get_dist_to_mine(reuslts=results)
         delta_r = (self.last_dist - current_dist) 
         final_reward += delta_r
@@ -127,18 +133,8 @@ class EpMineEnv(gym.Env):
         return final_reward
     
     def step(self, action):
-        # 将离散动作转换为连续动作向量
-        if isinstance(action, (int, np.integer)):
-            # 离散动作到连续动作的映射
-            action_map = {
-                0: [1.0, 0.0, 0.0],  # 前进
-                1: [-1.0, 0.0, 0.0], # 后退
-                2: [0.0, 1.0, 0.0],  # 右转
-                3: [0.0, -1.0, 0.0]  # 左转
-            }
-            continuous_action = action_map[action]
-        else:
-            continuous_action = action
+        # 使用连续动作
+        continuous_action = action
         
         # 添加手臂角度和抓取动作
         continuous_action = [continuous_action[0], continuous_action[1], continuous_action[2], 10.0, 1.0]
