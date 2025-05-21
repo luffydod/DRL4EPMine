@@ -1,6 +1,7 @@
 import argparse
 import os
 
+from mindspore import nn
 from mindspore import context
 from mindspore import dtype as mstype
 from mindspore.communication import get_rank, init
@@ -95,7 +96,18 @@ def train(episode=options.episode):
     except KeyboardInterrupt:
         print("运行中断，正在关闭环境")
     finally:
-        ppo_session.env.close()
+        if ppo_session.msrl.collect_environment is not None:
+            if isinstance(ppo_session.msrl.collect_environment, nn.CellList):
+                for env in ppo_session.msrl.collect_environment:
+                    env.close()
+            else:
+                ppo_session.msrl.collect_environment.close()
+        if ppo_session.msrl.eval_environment is not None:
+            if isinstance(ppo_session.msrl.eval_environment, nn.CellList):
+                for env in ppo_session.msrl.eval_environment:
+                    env.close()
+            else:
+                ppo_session.msrl.eval_environment.close()
         print("环境已关闭")
 
 
