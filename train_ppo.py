@@ -56,39 +56,41 @@ options, _ = parser.parse_known_args()
 
 
 def train(episode=options.episode):
-    try:
-        """PPO train entry."""
-        if options.device_target != "Auto":
-            context.set_context(device_target=options.device_target)
-        if context.get_context("device_target") in ["CPU"]:
-            context.set_context(enable_graph_kernel=True)
-        if context.get_context("device_target") in ["Ascend"] and options.graph_op_run:
-            os.environ["GRAPH_OP_RUN"] = "1"
+    
+    """PPO train entry."""
+    if options.device_target != "Auto":
+        context.set_context(device_target=options.device_target)
+    if context.get_context("device_target") in ["CPU"]:
+        context.set_context(enable_graph_kernel=True)
+    if context.get_context("device_target") in ["Ascend"] and options.graph_op_run:
+        os.environ["GRAPH_OP_RUN"] = "1"
 
-        compute_type = (
-            mstype.float32 if options.precision_mode == "fp32" else mstype.float16
-        )
-        config.algorithm_config["policy_and_network"]["params"][
-            "compute_type"
-        ] = compute_type
-        if compute_type == mstype.float16 and options.device_target != "Ascend":
-            raise ValueError("Fp16 mode is supported by Ascend backend.")
-        duration = config.trainer_params.get("duration")
-        context.set_context(mode=context.GRAPH_MODE, max_call_depth=100000)
-        is_distribte = options.enable_distribute
-        if is_distribte:
-            context.set_context(enable_graph_kernel=False)
-            dp = config.deploy_config.get("distribution_policy")
-            if dp == DP.SingleActorLearnerMultiEnvHeterDP:
-                init("mccl")
-                rank_id = get_rank()
-                if rank_id == 0:
-                    context.set_context(device_target="GPU")
-            config.deploy_config["worker_num"] = options.worker_num
-            config.deploy_config["auto_distribution"] = is_distribte
-        print(options.env_yaml)
-        ppo_session = PPOSession(options.env_yaml, options.algo_yaml, is_distribte)
-        print(options.env_yaml)
+    compute_type = (
+        mstype.float32 if options.precision_mode == "fp32" else mstype.float16
+    )
+    config.algorithm_config["policy_and_network"]["params"][
+        "compute_type"
+    ] = compute_type
+    if compute_type == mstype.float16 and options.device_target != "Ascend":
+        raise ValueError("Fp16 mode is supported by Ascend backend.")
+    duration = config.trainer_params.get("duration")
+    context.set_context(mode=context.GRAPH_MODE, max_call_depth=100000)
+    is_distribte = options.enable_distribute
+    if is_distribte:
+        context.set_context(enable_graph_kernel=False)
+        dp = config.deploy_config.get("distribution_policy")
+        if dp == DP.SingleActorLearnerMultiEnvHeterDP:
+            init("mccl")
+            rank_id = get_rank()
+            if rank_id == 0:
+                context.set_context(device_target="GPU")
+        config.deploy_config["worker_num"] = options.worker_num
+        config.deploy_config["auto_distribution"] = is_distribte
+    print(options.env_yaml)
+    ppo_session = PPOSession(options.env_yaml, options.algo_yaml, is_distribte)
+    print(options.env_yaml)
+    try:
+        print("开始训练")
         ppo_session.run(class_type=PPOTrainer, episode=episode, duration=duration)
     except KeyboardInterrupt:
         print("运行中断，正在关闭环境")
