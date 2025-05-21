@@ -1,0 +1,4 @@
+algorithm_config:
+  collect_environment:
+    number: 1
+    num_parallel: 0

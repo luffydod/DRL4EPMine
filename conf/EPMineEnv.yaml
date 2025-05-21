@@ -1,0 +1,9 @@
+env: EpMineEnv-v0
+env_class: mindspore_rl.environment.gym_environment
+env_type: GymEnvironment
+collect_env_params:
+  GymEnvironment:
+    name: EpMineEnv-v0
+eval_env_params:
+  GymEnvironment:
+    name: EpMineEnv-v0
