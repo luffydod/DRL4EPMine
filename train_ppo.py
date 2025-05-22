@@ -15,7 +15,7 @@ def parse_args():
     
     parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
     parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_random)")
-    parser.add_argument("-mp", "--model_path", type=str, default="models", help="模型加载或者保存路径")
+    parser.add_argument("-mp", "--model_path", type=str, default=None, help="模型加载或者保存路径")
     parser.add_argument("-v", "--video", type=bool, default=False, help="是否保存视频")
     
     return parser.parse_args()
@@ -64,7 +64,7 @@ def train(args, config):
         )
         
         # 加载模型
-        if os.path.exists(args.model_path):
+        if args.model_path:
             model.load(args.model_path, device=args.device)
             print(f"模型权重已从 {args.model_path} 加载")
         else:
