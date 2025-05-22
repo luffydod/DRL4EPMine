@@ -24,7 +24,7 @@ def IsOpen(port, ip='127.0.0.1'):
 
 TEAM_NAME = 'ControlEP?team=0'
 AGENT_ID = 0
-IMAGE_SIZE = 84
+IMAGE_SIZE = 128
 
 def warp_action(action):
     action_dict = {'{}_{}'.format(TEAM_NAME, AGENT_ID): action}
@@ -49,8 +49,13 @@ class EpMineEnv(gym.Env):
         self.render_mode = render_mode
         
         engine_configuration_channel = EngineConfigurationChannel()
-        engine_configuration_channel.set_configuration_parameters(width=200, height=100,
-                                                                      time_scale=time_scale)
+        engine_configuration_channel.set_configuration_parameters(
+            width=1280, 
+            height=720,
+            time_scale=time_scale,
+            target_frame_rate=60,
+            capture_frame_rate=60,
+            )
         self._engine_Environment_channel = EnvironmentParametersChannel()
         self.env = None
         self.port = port

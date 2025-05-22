@@ -15,7 +15,7 @@ def parse_args():
     
     parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
     parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_render)")
-    parser.add_argument("-mp", "--model_path", type=str, default="models", help="模型加载路径")
+    parser.add_argument("-mp", "--model_path", type=str, default="models", help="模型加载或者保存路径")
     
     return parser.parse_args()
 
@@ -23,7 +23,6 @@ def train(args, config):
     try:
         # 确保目录存在
         os.makedirs(config.save_path, exist_ok=True)
-        os.makedirs(config.log_path, exist_ok=True)
         
         # 创建向量化环境
         env = make_vec_env(
@@ -59,13 +58,22 @@ def train(args, config):
             vf_coef=config.vf_coef,
             max_grad_norm=config.max_grad_norm,
             verbose=config.verbose,
-            device=args.device
+            device=args.device,
+            tensorboard_log=config.tensorboard_log
         )
         
+        # 加载模型
+        if os.path.exists(args.model_path):
+            model.load(args.model_path, device=args.device)
+            print(f"模型权重已从 {args.model_path} 加载")
+        else:
+            print(f"模型不存在，开始训练...")
+            
         # 训练模型
         model.learn(
             total_timesteps=config.total_timesteps,
-            callback=checkpoint_callback
+            callback=checkpoint_callback,
+            progress_bar=True
         )
         
         # 保存最终模型
@@ -118,7 +126,7 @@ def test(args, config):
             device=args.device
         )
         # load model
-        model.load(args.model_path)
+        model.load(args.model_path, device=args.device)
         
         # 测试模型
         print("开始测试模型...")
@@ -140,6 +148,7 @@ def test(args, config):
             print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
             print('----------------------------------------')
             step += 1
+            # time.sleep(0.1)
             if step > 1000:
                 break
         
@@ -171,7 +180,9 @@ def test_render(args, config):
             file_name=config.file_name, 
             port=30001, 
             no_graph=False, 
-            render_mode="human"
+            time_scale=config.time_scale,
+            render_mode="human",
+            seed=config.seed,
         )
         
         obs, _ = env.reset()
@@ -193,7 +204,6 @@ def test_render(args, config):
             action = env.action_space.sample()
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            
             frame = obs.copy()
             frames.append(frame)
             
