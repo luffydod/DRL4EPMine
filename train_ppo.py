@@ -14,8 +14,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="PPO运行参数")
     
     parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
-    parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_render)")
+    parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_random)")
     parser.add_argument("-mp", "--model_path", type=str, default="models", help="模型加载或者保存路径")
+    parser.add_argument("-v", "--video", type=bool, default=False, help="是否保存视频")
     
     return parser.parse_args()
 
@@ -86,13 +87,9 @@ def train(args, config):
         print("环境已关闭")
         env.close()
 
-def test(args, config):
+def test(args, config, save_video=False, random_action=False):
     try:
         import time 
-        import cv2 as cv
-        
-        video_path = "videos"
-        os.makedirs(video_path, exist_ok=True)
         
         # 创建环境
         env = EpMineEnv(
@@ -103,33 +100,40 @@ def test(args, config):
         
         obs, _= env.reset()
         
-        # 准备视频写入器
-        height, width = obs.shape[:2]
-        fourcc = cv.VideoWriter_fourcc(*'mp4v')
-        video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
+        if save_video:
+            import cv2 as cv
+            video_path = "videos"
+            os.makedirs(video_path, exist_ok=True)
+            # 准备视频写入器
+            height, width = obs.shape[:2]
+            fourcc = cv.VideoWriter_fourcc(*'mp4v')
+            video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
         
-        # 创建PPO模型
-        model = PPO(
-            config.policy, 
-            env, 
-            learning_rate=config.learning_rate,
-            n_steps=config.n_steps,
-            batch_size=config.batch_size,
-            n_epochs=config.n_epochs,
-            gamma=config.gamma,
-            gae_lambda=config.gae_lambda,
-            clip_range=config.clip_range,
-            ent_coef=config.ent_coef,
-            vf_coef=config.vf_coef,
-            max_grad_norm=config.max_grad_norm,
-            verbose=config.verbose,
-            device=args.device
-        )
-        # load model
-        model.load(args.model_path, device=args.device)
-        
-        # 测试模型
-        print("开始测试模型...")
+        if not random_action:
+            # 创建PPO模型
+            model = PPO(
+                config.policy, 
+                env, 
+                learning_rate=config.learning_rate,
+                n_steps=config.n_steps,
+                batch_size=config.batch_size,
+                n_epochs=config.n_epochs,
+                gamma=config.gamma,
+                gae_lambda=config.gae_lambda,
+                clip_range=config.clip_range,
+                ent_coef=config.ent_coef,
+                vf_coef=config.vf_coef,
+                max_grad_norm=config.max_grad_norm,
+                verbose=config.verbose,
+                device=args.device
+            )
+            # load model
+            model.load(args.model_path, device=args.device)
+            
+            # 测试模型
+            print("开始测试模型...")
+        else:
+            print("开始随机动作仿真测试...")
         
         frames = []
         done = False
@@ -137,12 +141,17 @@ def test(args, config):
         
         while not done:
             print(time.time())
-            action, _state = model.predict(obs)
+            if random_action:
+                action = env.action_space.sample()
+            else:
+                action, _state = model.predict(obs)
+                
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             
-            frame = obs.copy()
-            frames.append(frame)
+            if save_video:
+                frame = obs.copy()
+                frames.append(frame)
             
             position = info["robot_position"]
             print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
@@ -152,77 +161,16 @@ def test(args, config):
             if step > 1000:
                 break
         
-        # 将收集的帧写入视频
-        for frame in frames:
-            video_writer.write(frame)
-            
-        video_writer.release()
-        print(f"视频已保存至: {video_path}/simulation_hd.mp4")
-        
-    except KeyboardInterrupt:
-        print("运行中断，正在关闭环境")
-        
-    finally:
-        print("环境已关闭")
-        env.close()
-        if 'video_writer' in locals() and video_writer is not None:
+        if save_video:
+            # 将收集的帧写入视频
+            for frame in frames:
+                video_writer.write(frame)
             video_writer.release()
-
-def test_render(args, config):
-    import time 
-    import cv2 as cv
-    
-    video_path = "videos"
-    os.makedirs(video_path, exist_ok=True)
-    
-    try:
-        env = EpMineEnv(
-            file_name=config.file_name, 
-            port=30001, 
-            no_graph=False, 
-            time_scale=config.time_scale,
-            render_mode="human",
-            seed=config.seed,
-        )
-        
-        obs, _ = env.reset()
-        done = False
-        step = 0
-        
-        # 记录实际观察空间的大小
-        print(f"观察空间大小: {obs.shape}")
-        
-        # 准备视频写入器
-        height, width = obs.shape[:2]
-        fourcc = cv.VideoWriter_fourcc(*'mp4v')
-        video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
-        
-        frames = []
-        
-        while not done:
-            print(time.time())
-            action = env.action_space.sample()
-            obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            frame = obs.copy()
-            frames.append(frame)
-            
-            position = info["robot_position"]
-            print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
-            print('----------------------------------------')
-            step += 1
-            if step > 1000:
-                break
-        
-        # 将收集的帧写入视频
-        for frame in frames:
-            video_writer.write(frame)
-            
-        video_writer.release()
-        print(f"视频已保存至: {video_path}/simulation_hd.mp4")
+            print(f"视频已保存至: {video_path}/simulation_hd.mp4")
         
     except KeyboardInterrupt:
         print("运行中断，正在关闭环境")
+        
     finally:
         print("环境已关闭")
         env.close()
@@ -239,8 +187,8 @@ if __name__ == "__main__":
     if args.action == "train":
         train(args, config)
     elif args.action == "test":
-        test(args, config)
-    elif args.action == "test_render":
-        test_render(args, config)
+        test(args, config, save_video=args.video, random_action=False)
+    elif args.action == "test_random":
+        test(args, config, save_video=args.video, random_action=True)
     else:
         raise ValueError(f"无效的运行模式: {args.action}")
