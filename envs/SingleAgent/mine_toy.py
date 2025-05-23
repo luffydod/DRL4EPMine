@@ -42,20 +42,30 @@ class EpMineEnv(gym.Env):
                  only_image: bool = True,
                  only_state: bool = False,
                  no_graph: bool = True,
-                 render_mode=None):
+                 discrete_action: bool = True,
+                 render_mode="rgb_array"):
         super().__init__()
         
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        self.discrete_action = discrete_action
         
         engine_configuration_channel = EngineConfigurationChannel()
-        engine_configuration_channel.set_configuration_parameters(
-            width=1280, 
-            height=720,
-            time_scale=time_scale,
-            target_frame_rate=60,
-            capture_frame_rate=60,
+        if render_mode == "human":
+            engine_configuration_channel.set_configuration_parameters(
+                width=1280, 
+                height=720,
+                time_scale=time_scale,
+                target_frame_rate=60,
+                capture_frame_rate=60,
             )
+        else:
+            engine_configuration_channel.set_configuration_parameters(
+                width=200, 
+                height=100,
+                time_scale=time_scale,
+            )
+        
         self._engine_Environment_channel = EnvironmentParametersChannel()
         self.env = None
         self.port = port
@@ -76,13 +86,21 @@ class EpMineEnv(gym.Env):
             low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
         )
         
-        self.action_space = spaces.Box(
-            low=np.array([-10.0, -10.0, -3.0], dtype=np.float32), 
-            high=np.array([10.0, 10.0, 3.0], dtype=np.float32), 
-            shape=(3,), 
-            dtype=np.float32
-        )
-    
+        if self.discrete_action:
+            self.action_space = spaces.MultiDiscrete([3, 3, 3])
+            self.action_mapping = {
+                0: [10.0, 0.0, -10.0],
+                1: [10.0, 0.0, -10.0],
+                2: [3.0, 0.0, -3.0]
+            }
+        else:
+            self.action_space = spaces.Box(
+                low=np.array([-10.0, -10.0, -3.0], dtype=np.float32), 
+                high=np.array([10.0, 10.0, 3.0], dtype=np.float32), 
+                shape=(3,), 
+                dtype=np.float32
+            )
+        
     def seed(self, sd=0):
         self.close()
         worker_id = sd
@@ -137,15 +155,22 @@ class EpMineEnv(gym.Env):
         self.last_dist = current_dist
         return final_reward
     
-    def step(self, action):
-        # 使用连续动作
-        continuous_action = action
+    def step(self, act):
+        # print(f"act: {act}")
+        
+        if self.discrete_action:
+            # 使用离散动作映射
+            action = [self.action_mapping[i][act[i]] for i in range(len(act))]
+        else:
+            # 使用连续动作
+            action = act
+        # print(f"action: {action}")
         
         # 添加手臂角度和抓取动作
-        continuous_action = [continuous_action[0], continuous_action[1], continuous_action[2], 10.0, 1.0]
+        total_action = [action[0], action[1], action[2], 10.0, 1.0]
         
         # 创建ActionTuple并向环境发送动作
-        action_tuple = ActionTuple(np.array([continuous_action], dtype=np.float32))
+        action_tuple = ActionTuple(np.array([total_action], dtype=np.float32))
         action_dict = warp_action(action=action_tuple)
         
         # 执行动作
@@ -243,11 +268,6 @@ class EpMineEnv(gym.Env):
         return dist
     
     def render(self):
-        if self.render_mode == "rgb_array":
-            return self._render_frame()
-           
-    def _render_frame(self):
-        # Implementation of _render_frame method
         pass
     
     def close(self):
