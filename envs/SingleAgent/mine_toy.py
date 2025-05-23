@@ -24,7 +24,7 @@ def IsOpen(port, ip='127.0.0.1'):
 
 TEAM_NAME = 'ControlEP?team=0'
 AGENT_ID = 0
-IMAGE_SIZE = 128
+IMAGE_SIZE = 64
 
 def warp_action(action):
     action_dict = {'{}_{}'.format(TEAM_NAME, AGENT_ID): action}
@@ -42,13 +42,17 @@ class EpMineEnv(gym.Env):
                  only_image: bool = True,
                  only_state: bool = False,
                  no_graph: bool = True,
+                 norm_image: bool = True,
                  discrete_action: bool = True,
+                 verbose: bool = False,
                  render_mode="rgb_array"):
         super().__init__()
         
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.discrete_action = discrete_action
+        self.norm_image = norm_image
+        self.verbose = verbose
         
         engine_configuration_channel = EngineConfigurationChannel()
         if render_mode == "human":
@@ -82,17 +86,45 @@ class EpMineEnv(gym.Env):
         self.current_results = None
         self.catch_state = 0
         
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
-        )
+        if self.norm_image:
+            self.observation_space = spaces.Box(
+                low=0, high=1, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32
+            )
+        else:
+            self.observation_space = spaces.Box(
+                low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
+            )
         
         if self.discrete_action:
-            self.action_space = spaces.MultiDiscrete([3, 3, 3])
+            # self.action_space = spaces.MultiDiscrete([3, 3, 3])
+            # self.action_mapping = {
+            #     0: [10.0, 0.0, -10.0],
+            #     1: [10.0, 0.0, -10.0],
+            #     2: [3.0, 0.0, -3.0]
+            # }
+            self.action_space = spaces.Discrete(6)
             self.action_mapping = {
-                0: [10.0, 0.0, -10.0],
-                1: [10.0, 0.0, -10.0],
-                2: [3.0, 0.0, -3.0]
+                0: [0.1, 0.0, 0.0],
+                1: [-0.1, 0.0, 0.0],
+                2: [0.0, 0.1, 0.0],
+                3: [0.0, -0.1, 0.0],
+                4: [0.0, 0.0, 0.1],
+                5: [0.0, 0.0, -0.1],
             }
+            # self.action_mapping = {
+            #     0: [5.0, 0.0, 0.0],
+            #     1: [5.0, 0.0, 3.0],
+            #     2: [5.0, 0.0, -3.0],
+            #     3: [-5.0, 0.0, 0.0],
+            #     4: [-5.0, 0.0, 3.0],
+            #     5: [-5.0, 0.0, -3.0],
+            #     6: [0.0, 5.0, 0.0],
+            #     7: [0.0, 5.0, 3.0],
+            #     8: [0.0, 5.0, -3.0],
+            #     9: [0.0, -5.0, 0.0],
+            #     10: [0.0, -5.0, 3.0],
+            #     11: [0.0, -5.0, -3.0],
+            # }
         else:
             self.action_space = spaces.Box(
                 low=np.array([-10.0, -10.0, -3.0], dtype=np.float32), 
@@ -160,14 +192,16 @@ class EpMineEnv(gym.Env):
         
         if self.discrete_action:
             # 使用离散动作映射
-            action = [self.action_mapping[i][act[i]] for i in range(len(act))]
+            # action = [self.action_mapping[i][act[i]] for i in range(len(act))]
+            action = self.action_mapping[int(act)]
         else:
             # 使用连续动作
             action = act
-        # print(f"action: {action}")
+        if self.verbose:
+            print(f"action: {action}")
         
         # 添加手臂角度和抓取动作
-        total_action = [action[0], action[1], action[2], 10.0, 1.0]
+        total_action = [action[0], action[1], action[2], 10.0, 0.0]
         
         # 创建ActionTuple并向环境发送动作
         action_tuple = ActionTuple(np.array([total_action], dtype=np.float32))
@@ -215,7 +249,9 @@ class EpMineEnv(gym.Env):
             done = True
             obs = self.decoder_results(results=terminal_result)
             reward = self.get_dense_reward(results=terminal_result)
+            print(f"Pre Done! terminal_reward: {reward}", end="  ")
             self.current_results = terminal_result
+            print(f"robot_position: {self.get_robot_pose(results=terminal_result)[0]}")
             robot_position = self.get_robot_pose(results=terminal_result)[0]
         else:
             obs = self.decoder_results(results=decision_result)
@@ -234,6 +270,9 @@ class EpMineEnv(gym.Env):
         
         # 调整图像大小以匹配观察空间
         img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+        
+        if self.norm_image:
+            img = img.astype(np.float32) / 255.0
         
         rotation = org_obs[1][AGENT_ID][0:4]
         position = org_obs[1][AGENT_ID][4:7]
@@ -263,6 +302,7 @@ class EpMineEnv(gym.Env):
     
     def get_dist_to_mine(self, reuslts):
         mine_pose = self.get_mine_pose(results=reuslts)
+        # print(f"mine_pose: {mine_pose}")
         robot_pose = self.get_robot_pose(results=reuslts)[0]
         dist = np.sqrt(robot_pose[0] ** 2 + robot_pose[2] ** 2)
         return dist

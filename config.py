@@ -7,7 +7,7 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 1234 # 224
+    seed: int = 2345 # 224
     
     # PPO算法超参数
     learning_rate: float = 3e-4
@@ -22,7 +22,7 @@ class PPOConfig:
     max_grad_norm: float = 0.5
     
     # 训练相关配置
-    total_timesteps: int = int(1e4)
+    total_timesteps: int = int(1e5)
     policy: str = "CnnPolicy"
     verbose: int = 1
     tensorboard_log: str = "tblogs"

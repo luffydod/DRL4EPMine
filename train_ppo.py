@@ -1,13 +1,65 @@
 import os
 import argparse
+import torch as th
+import torch.nn as nn
+import numpy as np
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.policies import ActorCriticCnnPolicy
 from envs.SingleAgent.mine_toy import EpMineEnv
 
 from config import PPOConfig
+
+# 图像格式：[H, W, C]
+class CustomCNN(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim=512):
+        super().__init__(observation_space, features_dim)
+        
+        # 获取图像尺寸
+        n_input_channels = observation_space.shape[2]  # 通道在最后
+        
+        # CNN网络
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        
+        # 计算CNN输出特征维度
+        with th.no_grad():
+            # 注意：这里我们需要转置输入，因为PyTorch期望通道优先格式
+            sample = th.as_tensor(observation_space.sample()[None]).float()
+            sample_channels_first = sample.permute(0, 3, 1, 2)  # NHWC -> NCHW
+            n_flatten = self.cnn(sample_channels_first).shape[1]
+        
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+            nn.ReLU()
+        )
+        
+    def forward(self, observations):
+        # 转置输入以匹配PyTorch的期望格式
+        batch_size = observations.shape[0]
+        observations_channels_first = observations.permute(0, 3, 1, 2)  # NHWC -> NCHW
+        return self.linear(self.cnn(observations_channels_first))
+
+# 自定义策略
+class CustomCnnPolicy(ActorCriticCnnPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            features_extractor_class=CustomCNN,
+            features_extractor_kwargs=dict(features_dim=512),
+            **kwargs
+        )
 
 def parse_args():
     """解析命令行参数"""
@@ -37,6 +89,16 @@ def train(args, config):
             }
         )
         
+        # 添加 VecNormalize 包装器
+        env = VecNormalize(
+            env,
+            norm_obs=False,  # 不标准化图像观察
+            norm_reward=True,  # 标准化奖励
+            clip_reward=10.0,
+            gamma=config.gamma,
+            epsilon=1e-8
+        )
+        
         # 设置保存模型的回调
         checkpoint_callback = CheckpointCallback(
             save_freq=config.save_freq,
@@ -44,9 +106,9 @@ def train(args, config):
             name_prefix=f"{config.env_id}_{config.policy}"
         )
         
-        # 创建PPO模型
+        # 创建PPO模型，使用自定义策略
         model = PPO(
-            config.policy, 
+            CustomCnnPolicy,  # 使用自定义策略而不是默认的 CnnPolicy
             env, 
             learning_rate=config.learning_rate,
             n_steps=config.n_steps,
@@ -80,6 +142,7 @@ def train(args, config):
         # 保存最终模型
         final_model_path = os.path.join(config.save_path, f"{config.env_id}_{config.policy}_final")
         model.save(final_model_path)
+        
         print(f"模型已保存至: {final_model_path}")
     except KeyboardInterrupt:
         print("运行中断，正在关闭环境")
@@ -95,7 +158,9 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         env = EpMineEnv(
             file_name=config.file_name,
             no_graph=no_graph,
-            render_mode="human"
+            seed=config.seed,
+            verbose=True,
+            render_mode="human",
         )
         
         obs, _= env.reset()
@@ -112,7 +177,7 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         if not random_action:
             # 创建PPO模型
             model = PPO(
-                config.policy, 
+                CustomCnnPolicy,
                 env, 
                 learning_rate=config.learning_rate,
                 n_steps=config.n_steps,
