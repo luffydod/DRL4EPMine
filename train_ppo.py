@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument("-d", "--device", type=str, default="auto", help="训练设备 (auto, cpu, cuda)")
     parser.add_argument("-a", "--action", type=str, default="train", help="运行模式 (train, test, test_random)")
     parser.add_argument("-mp", "--model_path", type=str, default=None, help="模型加载或者保存路径")
-    parser.add_argument("-v", "--video", type=bool, default=False, help="是否保存视频")
+    parser.add_argument("-v", "--video", action="store_true", help="是否保存视频")
     
     return parser.parse_args()
 
@@ -87,14 +87,14 @@ def train(args, config):
         print("环境已关闭")
         env.close()
 
-def test(args, config, save_video=False, random_action=False):
+def test(args, config, no_graph=False, save_video=False, random_action=False):
     try:
         import time 
         
         # 创建环境
         env = EpMineEnv(
             file_name=config.file_name,
-            no_graph=False,
+            no_graph=no_graph,
             render_mode="human"
         )
         
@@ -130,6 +130,9 @@ def test(args, config, save_video=False, random_action=False):
             # load model
             model.load(args.model_path, device=args.device)
             
+            # set eval
+            model.policy.set_training_mode(False)
+            
             # 测试模型
             print("开始测试模型...")
         else:
@@ -138,17 +141,19 @@ def test(args, config, save_video=False, random_action=False):
         frames = []
         done = False
         step = 0
+        total_reward = 0
         
         while not done:
             print(time.time())
             if random_action:
                 action = env.action_space.sample()
             else:
-                action, _state = model.predict(obs)
+                action, _state = model.predict(obs, deterministic=True)
                 
             obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
             
+            done = terminated or truncated
+            total_reward += reward
             if save_video:
                 frame = obs.copy()
                 frames.append(frame)
@@ -160,6 +165,9 @@ def test(args, config, save_video=False, random_action=False):
             # time.sleep(0.1)
             if step > 1000:
                 break
+        
+        print(f"总奖励: {total_reward}")
+        print(f"总步数: {step}")
         
         if save_video:
             # 将收集的帧写入视频
@@ -187,8 +195,8 @@ if __name__ == "__main__":
     if args.action == "train":
         train(args, config)
     elif args.action == "test":
-        test(args, config, save_video=args.video, random_action=False)
+        test(args, config, no_graph=False, save_video=args.video, random_action=False)
     elif args.action == "test_random":
-        test(args, config, save_video=args.video, random_action=True)
+        test(args, config, no_graph=False, save_video=args.video, random_action=True)
     else:
         raise ValueError(f"无效的运行模式: {args.action}")
