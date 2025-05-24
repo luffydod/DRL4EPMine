@@ -7,7 +7,7 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 2345 # 224
+    seed: int = 2234 # 224
     
     # PPO算法超参数
     learning_rate: float = 3e-4

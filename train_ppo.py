@@ -265,7 +265,8 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
             verbose=True,
             render_mode="human",
         )
-        
+        from gymnasium import spaces
+        env.action_space = spaces.Discrete(7)
         env.action_mapping = {
                 0: [8.0, 0.0, 0.0],
                 1: [-8.0, 0.0, 0.0],
@@ -273,6 +274,7 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
                 3: [0.0, -8.0, 0.0],
                 4: [0.0, 0.0, 2.0],
                 5: [0.0, 0.0, -2.0],
+                6: [0.0, 0.0, 0.0],
             }
         time.sleep(1)
         
@@ -283,7 +285,8 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
             'a': 1,  # 向左
             'd': 0,  # 向右
             'q': 5,  # 动作4
-            'e': 4   # 动作5
+            'e': 4,   # 动作5,
+            ' ': 6,   # 动作6
         }
         
         # 显示键位说明

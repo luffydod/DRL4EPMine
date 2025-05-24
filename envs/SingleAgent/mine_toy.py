@@ -45,6 +45,7 @@ class EpMineEnv(gym.Env):
                  norm_image: bool = True,
                  discrete_action: bool = True,
                  verbose: bool = False,
+                 log_file: str = "logs/env_logs.txt",
                  render_mode="rgb_array"):
         super().__init__()
         
@@ -53,6 +54,11 @@ class EpMineEnv(gym.Env):
         self.discrete_action = discrete_action
         self.norm_image = norm_image
         self.verbose = verbose
+        self.log_file = log_file
+        # 确保日志目录存在
+        log_dir = os.path.dirname(log_file)
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_file = log_file
         
         engine_configuration_channel = EngineConfigurationChannel()
         if render_mode == "human":
@@ -104,12 +110,12 @@ class EpMineEnv(gym.Env):
             # }
             self.action_space = spaces.Discrete(6)
             self.action_mapping = {
-                0: [0.1, 0.0, 0.0],
-                1: [-0.1, 0.0, 0.0],
-                2: [0.0, 0.1, 0.0],
-                3: [0.0, -0.1, 0.0],
-                4: [0.0, 0.0, 0.1],
-                5: [0.0, 0.0, -0.1],
+                0: [1.0, 0.0, 0.0],
+                1: [-1.0, 0.0, 0.0],
+                2: [0.0, 1.0, 0.0],
+                3: [0.0, -1.0, 0.0],
+                4: [0.0, 0.0, 0.15],
+                5: [0.0, 0.0, -0.15],
             }
             # self.action_mapping = {
             #     0: [5.0, 0.0, 0.0],
@@ -201,7 +207,7 @@ class EpMineEnv(gym.Env):
             print(f"action: {action}")
         
         # 添加手臂角度和抓取动作
-        total_action = [action[0], action[1], action[2], 10.0, 0.0]
+        total_action = [action[0], action[1], action[2], 10.0, 1.0]
         
         # 创建ActionTuple并向环境发送动作
         action_tuple = ActionTuple(np.array([total_action], dtype=np.float32))
@@ -249,10 +255,14 @@ class EpMineEnv(gym.Env):
             done = True
             obs = self.decoder_results(results=terminal_result)
             reward = self.get_dense_reward(results=terminal_result)
-            print(f"Pre Done! terminal_reward: {reward}", end="  ")
+            # print(f"Pre Done! terminal_reward: {reward}", end="  ")
             self.current_results = terminal_result
-            print(f"robot_position: {self.get_robot_pose(results=terminal_result)[0]}")
+            # print(f"robot_position: {self.get_robot_pose(results=terminal_result)[0]}")
             robot_position = self.get_robot_pose(results=terminal_result)[0]
+            # 将信息记录到日志文件而不是打印到控制台
+            log_message = f"Pre Done! terminal_reward: {reward:.1f}  robot_position: {robot_position[0]:.1f}, {robot_position[2]:.1f}"
+            with open(self.log_file, "a") as f:
+                f.write(log_message + "\n")
         else:
             obs = self.decoder_results(results=decision_result)
             reward = self.get_dense_reward(results=decision_result)
