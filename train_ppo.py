@@ -295,8 +295,9 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
         print("s: 向后 (3)")
         print("a: 向左 (0)")
         print("d: 向右 (1)")
-        print("q: 动作4 (4)")
-        print("e: 动作5 (5)")
+        print("q: 左转4 (4)")
+        print("e: 右转5 (5)")
+        print("space: 不动6 (6)")
         print("ESC: 退出")
         
         obs, _ = env.reset()
@@ -319,13 +320,13 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
         # 主循环
         while not done:
             # 等待按键
-            print("请按键选择动作 (w/a/s/d/q/e)，按ESC退出...")
+            print("请按键选择动作 (w/a/s/d/q/e)，按ESC退出...，按r重置环境")
             
             # 等待有效按键
             key = None
-            while key not in list(key_mapping.keys()) + ['esc']:
+            while key not in list(key_mapping.keys()) + ['esc', 'r']:
                 # 检测按键
-                for k in list(key_mapping.keys()) + ['esc']:
+                for k in list(key_mapping.keys()) + ['esc', 'r']:
                     if keyboard.is_pressed(k):
                         key = k
                         # 等待按键释放
@@ -338,6 +339,12 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
             if key == 'esc':
                 print("用户终止测试")
                 break
+            # 检查r重置环境
+            if key == 'r':
+                print("重置环境")
+                step = 0
+                obs, _ = env.reset()
+                continue
             
             # 执行动作
             action = key_mapping[key]
