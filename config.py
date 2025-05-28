@@ -8,6 +8,8 @@ class PPOConfig:
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
     seed: int = 2234 # 224
+    only_image: bool = False
+    only_state: bool = True
     
     # PPO算法超参数
     learning_rate: float = 3e-4

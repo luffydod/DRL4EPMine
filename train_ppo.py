@@ -85,7 +85,9 @@ def train(args, config):
             vec_env_cls=DummyVecEnv,
             env_kwargs={
                 "file_name": config.file_name,
-                "no_graph": True
+                "no_graph": True,
+                "only_image": config.only_image,
+                "only_state": config.only_state
             }
         )
         
@@ -107,8 +109,12 @@ def train(args, config):
         )
         
         # 创建PPO模型，使用自定义策略
+        ppo_policy = CustomCnnPolicy
+        if config.only_state:
+            ppo_policy = 'MlpPolicy'
+            
         model = PPO(
-            CustomCnnPolicy,  # 使用自定义策略而不是默认的 CnnPolicy
+            ppo_policy,
             env, 
             learning_rate=config.learning_rate,
             n_steps=config.n_steps,

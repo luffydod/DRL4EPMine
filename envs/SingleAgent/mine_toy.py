@@ -92,15 +92,25 @@ class EpMineEnv(gym.Env):
         self.current_results = None
         self.catch_state = 0
         
-        if self.norm_image:
+        if self.only_image:
+            if self.norm_image:
+                self.observation_space = spaces.Box(
+                    low=0, high=1, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32
+                )
+            else:
+                self.observation_space = spaces.Box(
+                    low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
+                )
+        elif self.only_state:
             self.observation_space = spaces.Box(
-                low=0, high=1, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32
+                low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
             )
         else:
-            self.observation_space = spaces.Box(
-                low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
-            )
-        
+            self.observation_space = spaces.Dict({
+                'image': spaces.Box(low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8),
+                'state': spaces.Box(low=-np.Inf, high=np.Inf, shape=(7,), dtype=np.float32)
+            })
+            
         if self.discrete_action:
             # self.action_space = spaces.MultiDiscrete([3, 3, 3])
             # self.action_mapping = {
@@ -261,7 +271,7 @@ class EpMineEnv(gym.Env):
             robot_position = self.get_robot_pose(results=terminal_result)[0]
             # 将信息记录到日志文件而不是打印到控制台
             log_message = f"Pre Done! terminal_reward: {reward:.1f}  robot_position: {robot_position[0]:.1f}, {robot_position[2]:.1f}"
-            with open(self.log_file, "a") as f:
+            with open(self.log_file, "w") as f:
                 f.write(log_message + "\n")
         else:
             obs = self.decoder_results(results=decision_result)
@@ -276,28 +286,33 @@ class EpMineEnv(gym.Env):
 
     def decoder_results(self, results):
         org_obs = results[TEAM_NAME].obs
-        img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
-        
-        # 调整图像大小以匹配观察空间
-        img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-        
-        if self.norm_image:
-            img = img.astype(np.float32) / 255.0
-        
-        rotation = org_obs[1][AGENT_ID][0:4]
-        position = org_obs[1][AGENT_ID][4:7]
-        arm_angle = org_obs[1][AGENT_ID][7]
-        catching = org_obs[1][AGENT_ID][8]
-        is_catched = org_obs[1][AGENT_ID][9]
-        mineral_pose = org_obs[1][AGENT_ID][10:13]
-        state = org_obs[1][AGENT_ID]
-        obs = {"image": img, "state": state}
-        self.catch_state = catching
         if self.only_image:
+            img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
+            # 调整图像大小以匹配观察空间
+            img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+            if self.norm_image:
+                img = img.astype(np.float32) / 255.0
             return img
+        
         elif self.only_state:
             return np.array(org_obs[1][AGENT_ID][:7])
-        return obs
+        
+        else:
+            img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
+            # 调整图像大小以匹配观察空间
+            img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+            if self.norm_image:
+                img = img.astype(np.float32) / 255.0
+            rotation = org_obs[1][AGENT_ID][0:4]
+            position = org_obs[1][AGENT_ID][4:7]
+            arm_angle = org_obs[1][AGENT_ID][7]
+            catching = org_obs[1][AGENT_ID][8]
+            is_catched = org_obs[1][AGENT_ID][9]
+            mineral_pose = org_obs[1][AGENT_ID][10:13]
+            state = org_obs[1][AGENT_ID]
+            obs = {"image": img, "state": state}
+            self.catch_state = catching
+            return obs
     
     def get_robot_pose(self, results):
         org_obs = results[TEAM_NAME].obs
