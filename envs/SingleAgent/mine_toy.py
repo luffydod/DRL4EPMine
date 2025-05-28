@@ -24,7 +24,7 @@ def IsOpen(port, ip='127.0.0.1'):
 
 TEAM_NAME = 'ControlEP?team=0'
 AGENT_ID = 0
-IMAGE_SIZE = 64
+IMAGE_SIZE = 224
 
 def warp_action(action):
     action_dict = {'{}_{}'.format(TEAM_NAME, AGENT_ID): action}

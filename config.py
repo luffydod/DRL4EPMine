@@ -7,7 +7,7 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 1234 # 224
+    seed: int = 2321 # 224
     only_image: bool = True
     only_state: bool = False
     
@@ -25,7 +25,7 @@ class PPOConfig:
     
     # 训练相关配置
     total_timesteps: int = int(1e5)
-    policy: str = "cnn_custom"
+    policy: str = "resnet"
     """ choose from 
         'cnn', -- 默认的CNN策略
         'mlp', -- 默认的MLP策略
