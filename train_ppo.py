@@ -1,68 +1,13 @@
 import os
 import argparse
-import torch as th
-import torch.nn as nn
-import numpy as np
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.policies import ActorCriticCnnPolicy
 from envs.SingleAgent.mine_toy import EpMineEnv
 
 from config import PPOConfig
-
-# 图像格式：[H, W, C]
-class CustomCNN(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=512):
-        super().__init__(observation_space, features_dim)
-        
-        # 获取图像尺寸
-        n_input_channels = observation_space.shape[2]  # 通道在最后
-        
-        # 改进的CNN网络 - 更深层次但保持小卷积核
-        self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Flatten(),
-        )
-        
-        # 计算CNN输出特征维度
-        with th.no_grad():
-            sample = th.as_tensor(observation_space.sample()[None]).float()
-            sample_channels_first = sample.permute(0, 3, 1, 2)  # NHWC -> NCHW
-            n_flatten = self.cnn(sample_channels_first).shape[1]
-        
-        # 更复杂的MLP头部
-        self.linear = nn.Sequential(
-            nn.Linear(n_flatten, 256),
-            nn.ReLU(),
-            nn.Linear(256, features_dim),
-            nn.ReLU()
-        )
-        
-    def forward(self, observations):
-        # 转置输入以匹配PyTorch的期望格式
-        observations_channels_first = observations.permute(0, 3, 1, 2)  # NHWC -> NCHW
-        return self.linear(self.cnn(observations_channels_first))
-
-# 自定义策略
-class CustomCnnPolicy(ActorCriticCnnPolicy):
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args,
-            features_extractor_class=CustomCNN,
-            features_extractor_kwargs=dict(features_dim=512),
-            **kwargs
-        )
 
 def parse_args():
     """解析命令行参数"""
@@ -112,9 +57,16 @@ def train(args, config):
         )
         
         # 创建PPO模型，使用自定义策略
-        ppo_policy = CustomCnnPolicy
-        if config.only_state:
+        if config.policy == 'mlp':
             ppo_policy = 'MlpPolicy'
+        elif config.policy == 'cnn':
+            ppo_policy = 'CnnPolicy'
+        elif config.policy == 'cnn_custom':
+            from policy_network import CustomCnnPolicy
+            ppo_policy = CustomCnnPolicy
+        elif config.policy == 'resnet':
+            from policy_network import ResNetPolicy
+            ppo_policy = ResNetPolicy
             
         model = PPO(
             ppo_policy,
@@ -170,6 +122,8 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
             seed=config.seed,
             verbose=True,
             render_mode="human",
+            only_image=config.only_image,
+            only_state=config.only_state
         )
         
         obs, _= env.reset()
@@ -186,9 +140,16 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         if not random_action:
             
             # 创建PPO模型，使用自定义策略
-            ppo_policy = CustomCnnPolicy
-            if config.only_state:
+            if config.policy == 'mlp':
                 ppo_policy = 'MlpPolicy'
+            elif config.policy == 'cnn':
+                ppo_policy = 'CnnPolicy'
+            elif config.policy == 'cnn_custom':
+                from policy_network import CustomCnnPolicy
+                ppo_policy = CustomCnnPolicy
+            elif config.policy == 'resnet':
+                from policy_network import ResNetPolicy
+                ppo_policy = ResNetPolicy
                 
             # 创建PPO模型
             model = PPO(

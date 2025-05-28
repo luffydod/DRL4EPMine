@@ -7,9 +7,9 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 2244 # 224
-    only_image: bool = False
-    only_state: bool = True
+    seed: int = 1234 # 224
+    only_image: bool = True
+    only_state: bool = False
     
     # PPO算法超参数
     learning_rate: float = 3e-4
@@ -25,7 +25,13 @@ class PPOConfig:
     
     # 训练相关配置
     total_timesteps: int = int(1e5)
-    policy: str = "CnnPolicy"
+    policy: str = "cnn_custom"
+    """ choose from 
+        'cnn', -- 默认的CNN策略
+        'mlp', -- 默认的MLP策略
+        'resnet', -- 自定义的ResNet策略
+        'cnn_custom' -- 自定义的CNN策略
+    """
     verbose: int = 1
     tensorboard_log: str = "tblogs"
     
