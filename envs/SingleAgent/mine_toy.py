@@ -60,6 +60,10 @@ class EpMineEnv(gym.Env):
         os.makedirs(log_dir, exist_ok=True)
         self.log_file = log_file
         
+        with open(self.log_file, "w") as f:
+            # add time stamp
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n")
+            
         engine_configuration_channel = EngineConfigurationChannel()
         if render_mode == "human":
             engine_configuration_channel.set_configuration_parameters(
@@ -271,7 +275,7 @@ class EpMineEnv(gym.Env):
             robot_position = self.get_robot_pose(results=terminal_result)[0]
             # 将信息记录到日志文件而不是打印到控制台
             log_message = f"Pre Done! terminal_reward: {reward:.1f}  robot_position: {robot_position[0]:.1f}, {robot_position[2]:.1f}"
-            with open(self.log_file, "w") as f:
+            with open(self.log_file, "a") as f:
                 f.write(log_message + "\n")
         else:
             obs = self.decoder_results(results=decision_result)
