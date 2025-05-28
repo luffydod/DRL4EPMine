@@ -7,7 +7,7 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 2234 # 224
+    seed: int = 2244 # 224
     only_image: bool = False
     only_state: bool = True
     

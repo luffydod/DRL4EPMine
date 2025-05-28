@@ -22,32 +22,35 @@ class CustomCNN(BaseFeaturesExtractor):
         # 获取图像尺寸
         n_input_channels = observation_space.shape[2]  # 通道在最后
         
-        # CNN网络
+        # 改进的CNN网络 - 更深层次但保持小卷积核
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )
         
         # 计算CNN输出特征维度
         with th.no_grad():
-            # 注意：这里我们需要转置输入，因为PyTorch期望通道优先格式
             sample = th.as_tensor(observation_space.sample()[None]).float()
             sample_channels_first = sample.permute(0, 3, 1, 2)  # NHWC -> NCHW
             n_flatten = self.cnn(sample_channels_first).shape[1]
         
+        # 更复杂的MLP头部
         self.linear = nn.Sequential(
-            nn.Linear(n_flatten, features_dim),
+            nn.Linear(n_flatten, 256),
+            nn.ReLU(),
+            nn.Linear(256, features_dim),
             nn.ReLU()
         )
         
     def forward(self, observations):
         # 转置输入以匹配PyTorch的期望格式
-        batch_size = observations.shape[0]
         observations_channels_first = observations.permute(0, 3, 1, 2)  # NHWC -> NCHW
         return self.linear(self.cnn(observations_channels_first))
 
@@ -181,9 +184,15 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
             video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
         
         if not random_action:
+            
+            # 创建PPO模型，使用自定义策略
+            ppo_policy = CustomCnnPolicy
+            if config.only_state:
+                ppo_policy = 'MlpPolicy'
+                
             # 创建PPO模型
             model = PPO(
-                CustomCnnPolicy,
+                ppo_policy,
                 env, 
                 learning_rate=config.learning_rate,
                 n_steps=config.n_steps,
@@ -221,12 +230,13 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
             else:
                 action, _state = model.predict(obs, deterministic=True)
                 
-            obs, reward, terminated, truncated, info = env.step(action)
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            obs = next_obs.copy()
             
             done = terminated or truncated
             total_reward += reward
             if save_video:
-                frame = obs.copy()
+                frame = next_obs.copy()
                 frames.append(frame)
             
             position = info["robot_position"]
