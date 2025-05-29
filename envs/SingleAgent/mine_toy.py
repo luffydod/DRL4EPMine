@@ -110,10 +110,13 @@ class EpMineEnv(gym.Env):
                 low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
             )
         else:
-            self.observation_space = spaces.Dict({
-                'image': spaces.Box(low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8),
-                'state': spaces.Box(low=-np.Inf, high=np.Inf, shape=(7,), dtype=np.float32)
-            })
+            self.observation_space = spaces.Box(
+                low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
+            )
+            # self.observation_space = spaces.Dict({
+            #     'image': spaces.Box(low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8),
+            #     'state': spaces.Box(low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32)
+            # })
             
         if self.discrete_action:
             # self.action_space = spaces.MultiDiscrete([3, 3, 3])
@@ -307,14 +310,14 @@ class EpMineEnv(gym.Env):
             img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
             if self.norm_image:
                 img = img.astype(np.float32) / 255.0
-            rotation = org_obs[1][AGENT_ID][0:4]
-            position = org_obs[1][AGENT_ID][4:7]
-            arm_angle = org_obs[1][AGENT_ID][7]
+            # rotation = org_obs[1][AGENT_ID][0:4]
+            # position = org_obs[1][AGENT_ID][4:7]
+            # arm_angle = org_obs[1][AGENT_ID][7]
             catching = org_obs[1][AGENT_ID][8]
-            is_catched = org_obs[1][AGENT_ID][9]
-            mineral_pose = org_obs[1][AGENT_ID][10:13]
-            state = org_obs[1][AGENT_ID]
-            obs = {"image": img, "state": state}
+            # is_catched = org_obs[1][AGENT_ID][9]
+            # mineral_pose = org_obs[1][AGENT_ID][10:13]
+            # state = org_obs[1][AGENT_ID]
+            obs = {"image": img, "state": np.array(org_obs[1][AGENT_ID][:7])}
             self.catch_state = catching
             return obs
     
