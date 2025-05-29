@@ -51,28 +51,28 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
     env = EpMineEnv(
         file_name=config.file_name,
         no_graph=True,
-        only_image=config.only_image,
-        only_state=config.only_state
+        only_image=True,
+        only_state=False
     )
     
     # 创建策略网络
     if config.policy == 'cnn':
         policy_type = 'CnnPolicy'
-    elif config.policy == 'mlp':
-        policy_type = 'MlpPolicy'
     elif config.policy == 'resnet':
         from policy_network import ResNetPolicy
         policy_type = ResNetPolicy
     elif config.policy == 'cnn_custom':
         from policy_network import CustomCnnPolicy
         policy_type = CustomCnnPolicy
+    else:
+        raise ValueError(f"不支持的策略类型: {config.policy}")
     
     # 创建PPO模型（我们只使用其策略网络部分）
     model = PPO(
         policy_type,
         env,
         learning_rate=config.learning_rate,
-        device='cuda' if torch.cuda.is_available() else 'cpu'
+        device=device
     )
     
     # 设置策略网络为训练模式
@@ -138,7 +138,8 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
     print(f"行为克隆训练完成! 最终模型已保存至: {final_model_path}")
     print(f"最佳模型已保存至: {os.path.join(model_save_path, 'bc_best_model')}, 准确率: {best_accuracy:.2f}%")
     
-    return model
+    # 关闭资源
+    env.close()
 
 def train_behavior_cloning_with_expert_model(config, expert_model_path, model_save_path, load_model_path=None, num_epochs=10, batch_size=32, device='auto', n_steps=1000):
     # 创建环境实例（仅用于获取空间信息）
@@ -287,7 +288,10 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         
     # 设置优化器
-    optimizer = optim.Adam(policy.parameters(), lr=config.learning_rate)
+    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='max', factor=0.5, patience=3, verbose=True
+    )
     
     # 设置损失函数
     criterion = nn.CrossEntropyLoss()
@@ -329,6 +333,9 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
         epoch_loss = total_loss / len(dataloader)
         epoch_accuracy = 100 * correct / total
         
+        # 更新学习率
+        scheduler.step(epoch_accuracy)
+        
         # 打印训练信息
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
         
@@ -345,7 +352,9 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
     print(f"行为克隆训练完成! 最终模型已保存至: {final_model_path}")
     print(f"最佳模型已保存至: {os.path.join(model_save_path, 'bc_best_model')}, 准确率: {best_accuracy:.2f}%")
     
-    return model
+    # 关闭资源
+    expert_env.close()
+    env.close()
 
 if __name__ == "__main__":
     
