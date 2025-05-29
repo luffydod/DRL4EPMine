@@ -17,29 +17,93 @@ class ExpertDataset(Dataset):
             self.expert_data = expert_data
         else:
             raise ValueError("专家数据路径或专家数据不能为空")
+        # process data type
+        self.process_data()
+        
+    def process_data(self):
+        for data in self.expert_data:
+            data['observation'] = torch.FloatTensor(data['observation'])
+            if isinstance(data['action'], np.ndarray):
+                if data['action'].ndim == 0:
+                    data['action'] = data['action'].item()
+            data['action'] = torch.tensor(data['action'], dtype=torch.long)
         
     def __len__(self):
         return len(self.expert_data)
     
     def __getitem__(self, idx):
-        data = self.expert_data[idx]
-        # obs = torch.FloatTensor(data['observation']) / 255.0  # 归一化图像
-        obs = torch.FloatTensor(data['observation'])
+        return self.expert_data[idx]
+
+def train_policy_model(model, dataloader, device, num_epochs, model_save_path):
+    policy = model.policy
+    policy.set_training_mode(True)
+    
+    # 设置优化器
+    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    
+    # 设置损失函数 - 使用交叉熵作为监督学习的损失函数
+    criterion = nn.CrossEntropyLoss()
+    
+    # 训练循环
+    best_accuracy = 0
+    
+    for epoch in range(num_epochs):
+        total_loss = 0
+        correct = 0
+        total = 0
+
+        for data in dataloader:
+            # 将数据移到相应设备
+            obs = data['observation'].to(device).squeeze()
+            actions = data['action'].to(device).squeeze()
+            
+            # 获取策略输出
+            features = policy.extract_features(obs)
+            latent_pi, latent_vf = policy.mlp_extractor(features)
+            action_logits = policy.action_net(latent_pi)
+            
+            # 计算监督学习损失 - 交叉熵
+            loss = criterion(action_logits, actions)
+            
+            # 反向传播
+            optimizer.zero_grad()
+            loss.backward()
+            
+            # 梯度裁剪
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
+            
+            optimizer.step()
+            
+            total_loss += loss.item()
+            
+            # 计算准确率
+            predicted_actions = torch.argmax(action_logits, dim=1)
+            correct += (predicted_actions == actions).sum().item()
+            total += actions.size(0)
         
-        # 处理numpy数组类型的action
-        if isinstance(data['action'], np.ndarray):
-            # 如果是标量数组，取其值
-            if data['action'].ndim == 0:
-                action_value = data['action'].item()
-            else:
-                action_value = data['action']
-        else:
-            action_value = data['action']
+        # 计算当前epoch的损失和准确率
+        epoch_loss = total_loss / len(dataloader)
+        epoch_accuracy = 100 * correct / total
         
-        # 转换为tensor
-        action = torch.tensor(action_value, dtype=torch.long)
+        # 更新学习率
+        scheduler.step(epoch_accuracy)
         
-        return obs, action
+        # 打印训练信息
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
+        
+        # 保存最佳模型
+        if epoch_accuracy > best_accuracy:
+            best_accuracy = epoch_accuracy
+            best_model_path = os.path.join(model_save_path, "bc_best_model")
+            model.save(best_model_path)
+            print(f"保存最佳模型，准确率: {best_accuracy:.2f}%")
+    
+    # 保存最终模型
+    final_model_path = os.path.join(model_save_path, "bc_final_model")
+    model.save(final_model_path)
+    print(f"行为克隆训练完成! 最终模型已保存至: {final_model_path}")
+    print(f"最佳模型已保存至: {os.path.join(model_save_path, 'bc_best_model')}, 准确率: {best_accuracy:.2f}%")
 
 def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_size, device, config):
     # 加载专家数据
@@ -75,70 +139,7 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
         device=device
     )
     
-    # 设置策略网络为训练模式
-    policy = model.policy
-    policy.set_training_mode(True)
-    
-    # 设置优化器
-    optimizer = optim.Adam(policy.parameters(), lr=config.learning_rate)
-    
-    # 设置损失函数
-    criterion = nn.CrossEntropyLoss()
-    
-    # 训练循环
-    best_accuracy = 0
-    
-    for epoch in range(num_epochs):
-        total_loss = 0
-        correct = 0
-        total = 0
-        
-        for obs, actions in dataloader:
-            # 将数据移到相应设备
-            obs = obs.to(device)
-            actions = actions.to(device).squeeze()
-            
-            # 获取策略输出
-            # 注意：model.predict用于推理，这里我们直接使用策略网络进行前向传播
-            # 使用策略网络的forward方法获取动作分布
-            features = policy.extract_features(obs)
-            latent_pi, latent_vf = policy.mlp_extractor(features)
-            action_logits = policy.action_net(latent_pi)
-            
-            # 计算损失
-            loss = criterion(action_logits, actions)
-            
-            # 反向传播
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            total_loss += loss.item()
-            
-            # 计算准确率
-            predicted_actions = torch.argmax(action_logits, dim=1)
-            correct += (predicted_actions == actions).sum().item()
-            total += actions.size(0)
-        
-        # 计算当前epoch的损失和准确率
-        epoch_loss = total_loss / len(dataloader)
-        epoch_accuracy = 100 * correct / total
-        
-        # 打印训练信息
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
-        
-        # 保存最佳模型
-        if epoch_accuracy > best_accuracy:
-            best_accuracy = epoch_accuracy
-            best_model_path = os.path.join(model_save_path, "bc_best_model")
-            model.save(best_model_path)
-            print(f"保存最佳模型，准确率: {best_accuracy:.2f}%")
-    
-    # 保存最终模型
-    final_model_path = os.path.join(model_save_path, "bc_final_model")
-    model.save(final_model_path)
-    print(f"行为克隆训练完成! 最终模型已保存至: {final_model_path}")
-    print(f"最佳模型已保存至: {os.path.join(model_save_path, 'bc_best_model')}, 准确率: {best_accuracy:.2f}%")
+    train_policy_model(model, dataloader, device, num_epochs, model_save_path)
     
     # 关闭资源
     env.close()
@@ -255,9 +256,6 @@ def train_behavior_cloning_with_expert_model(
     expert_policy = expert_model.policy
     expert_policy.set_training_mode(False)
     
-    policy = model.policy
-    policy.set_training_mode(True)
-    
     # 收集n_steps步专家数据
     total_steps = 0
     expert_data = []
@@ -308,89 +306,7 @@ def train_behavior_cloning_with_expert_model(
     dataset = ExpertDataset(expert_data=expert_data)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
-    # 设置优化器
-    optimizer = optim.Adam(policy.parameters(), lr=config.learning_rate)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=3, verbose=True
-    )
-    
-    # 设置损失函数 - 使用交叉熵作为监督学习的损失函数
-    criterion = nn.CrossEntropyLoss()
-    
-    # 训练循环
-    best_accuracy = 0
-    early_stopping_patience = 10
-    no_improvement_count = 0
-    
-    for epoch in range(num_epochs):
-        total_loss = 0
-        correct = 0
-        total = 0
-        last_epoch_loss = 1e3
-        
-        for obs, actions in dataloader:
-            # 将数据移到相应设备
-            obs = obs.to(device)
-            actions = actions.to(device).squeeze()
-            
-            # 获取策略输出
-            features = policy.extract_features(obs)
-            latent_pi, latent_vf = policy.mlp_extractor(features)
-            action_logits = policy.action_net(latent_pi)
-            
-            # 计算监督学习损失 - 交叉熵
-            loss = criterion(action_logits, actions)
-            
-            # 反向传播
-            optimizer.zero_grad()
-            loss.backward()
-            
-            # 梯度裁剪
-            torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
-            
-            optimizer.step()
-            
-            total_loss += loss.item()
-            
-            # 计算准确率
-            predicted_actions = torch.argmax(action_logits, dim=1)
-            correct += (predicted_actions == actions).sum().item()
-            total += actions.size(0)
-        
-        # 计算当前epoch的损失和准确率
-        epoch_loss = total_loss / len(dataloader)
-        epoch_accuracy = 100 * correct / total
-        
-        # 更新学习率
-        scheduler.step(epoch_accuracy)
-        
-        last_epoch_loss = epoch_loss
-        
-        # 打印训练信息
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
-        
-        # 保存最佳模型
-        if epoch_accuracy > best_accuracy:
-            best_accuracy = epoch_accuracy
-            best_model_path = os.path.join(model_save_path, "bc_best_model")
-            model.save(best_model_path)
-            print(f"保存最佳模型，准确率: {best_accuracy:.2f}%")
-        
-        if epoch_loss - last_epoch_loss < 1e-3:
-            no_improvement_count += 1
-        else:
-            no_improvement_count = 0
-        
-        # 早停检查
-        if no_improvement_count >= early_stopping_patience:
-            print(f"早停: {early_stopping_patience}轮内损失无提升")
-            break
-    
-    # 保存最终模型
-    final_model_path = os.path.join(model_save_path, "bc_final_model")
-    model.save(final_model_path)
-    print(f"行为克隆训练完成! 最终模型已保存至: {final_model_path}")
-    print(f"最佳模型已保存至: {os.path.join(model_save_path, 'bc_best_model')}, 准确率: {best_accuracy:.2f}%")
+    train_policy_model(model, dataloader, device, num_epochs, model_save_path)
     
     # 关闭资源
     expert_env.close()
