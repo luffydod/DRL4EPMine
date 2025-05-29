@@ -25,7 +25,20 @@ class ExpertDataset(Dataset):
         data = self.expert_data[idx]
         # obs = torch.FloatTensor(data['observation']) / 255.0  # 归一化图像
         obs = torch.FloatTensor(data['observation'])
-        action = torch.LongTensor([data['action']])
+        
+        # 处理numpy数组类型的action
+        if isinstance(data['action'], np.ndarray):
+            # 如果是标量数组，取其值
+            if data['action'].ndim == 0:
+                action_value = data['action'].item()
+            else:
+                action_value = data['action']
+        else:
+            action_value = data['action']
+        
+        # 转换为tensor
+        action = torch.tensor(action_value, dtype=torch.long)
+        
         return obs, action
 
 def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_size, device, config):
@@ -250,6 +263,7 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
         
         while not done:
             action, _states = expert_policy.predict(obs['state'])
+            # print(f"type of action: {type(action)}") numpy.ndarray
             episode_data.append({
                 'observation': obs['image'],
                 'action': action
