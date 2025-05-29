@@ -35,7 +35,9 @@ def train(args, config):
                 "file_name": config.file_name,
                 "no_graph": False,
                 "only_image": config.only_image,
-                "only_state": config.only_state
+                "only_state": config.only_state,
+                "discrete_action": True,
+                "max_episode_steps": 512,
             }
         )
         

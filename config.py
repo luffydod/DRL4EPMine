@@ -24,7 +24,7 @@ class PPOConfig:
     max_grad_norm: float = 0.5
     
     # 训练相关配置
-    total_timesteps: int = int(1e5)
+    total_timesteps: int = int(5e5)
     policy: str = "cnn"
     """ choose from 
         'cnn', -- 默认的CNN策略
