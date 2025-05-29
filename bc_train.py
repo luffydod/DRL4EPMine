@@ -236,27 +236,37 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
     policy = model.policy
     policy.set_training_mode(True)
     
-    # 收集1000步专家数据
-    steps = 0
-    done = False
+    # 收集n_steps步专家数据
+    total_steps = 0
     expert_data = []
+    
     obs, _ = expert_env.reset()
-    while steps < n_steps:
-        if done:
-            obs, _ = expert_env.reset()
-            print("next episode")
-            done = False
-        action, _states = expert_policy.predict(obs['state'])
-        expert_data.append({
-            'observation': obs['image'],
-            'action': action
-        })
-        next_obs, reward, terminated, truncated, info = expert_env.step(action)
-        done = terminated or truncated
+    
+    while total_steps < n_steps:
+        episode_steps = 0
+        done = False
+        episode_data = []
+        episode_reward = 0
         
-        print(f"step: {steps}, action: {action}, reward: {reward:.2f}")
-        obs = next_obs.copy()
-        steps += 1
+        while not done:
+            action, _states = expert_policy.predict(obs['state'])
+            episode_data.append({
+                'observation': obs['image'],
+                'action': action
+            })
+            next_obs, reward, terminated, truncated, info = expert_env.step(action)
+            done = terminated or truncated
+            episode_reward += reward
+            # print(f"step: {episode_steps}, action: {action}, reward: {reward:.2f}")
+            obs = next_obs.copy()
+            episode_steps += 1
+        
+        obs, _ = expert_env.reset()
+        print(f"episode step: {episode_steps}, episode reward: {episode_reward:.2f}")
+        if episode_reward > 1.0:
+            expert_data.extend(episode_data)
+            total_steps += episode_steps
+            print(f"total steps: {total_steps}")
     
     # 加载专家数据
     dataset = ExpertDataset(expert_data=expert_data)
