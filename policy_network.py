@@ -5,17 +5,14 @@ from torchvision.models import ResNet18_Weights
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.policies import ActorCriticCnnPolicy
 
-# 图像格式：[H, W, C]
+# 图像格式：[C, H, W]
 class CustomCNN(BaseFeaturesExtractor):
     def __init__(self, observation_space, features_dim=512):
         super().__init__(observation_space, features_dim)
         
-        # 获取图像尺寸
-        n_input_channels = observation_space.shape[2]  # 通道在最后
-        
         # 改进的CNN网络 - 更深层次但保持小卷积核
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
@@ -29,8 +26,7 @@ class CustomCNN(BaseFeaturesExtractor):
         # 计算CNN输出特征维度
         with torch.no_grad():
             sample = torch.as_tensor(observation_space.sample()[None]).float()
-            sample_channels_first = sample.permute(0, 3, 1, 2)  # NHWC -> NCHW
-            n_flatten = self.cnn(sample_channels_first).shape[1]
+            n_flatten = self.cnn(sample).shape[1]
         
         # 更复杂的MLP头部
         self.linear = nn.Sequential(
@@ -41,9 +37,7 @@ class CustomCNN(BaseFeaturesExtractor):
         )
         
     def forward(self, observations):
-        # 转置输入以匹配PyTorch的期望格式
-        observations_channels_first = observations.permute(0, 3, 1, 2)  # NHWC -> NCHW
-        return self.linear(self.cnn(observations_channels_first))
+        return self.linear(self.cnn(observations))
 
 # 自定义策略
 class CustomCnnPolicy(ActorCriticCnnPolicy):

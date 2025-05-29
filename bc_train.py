@@ -309,21 +309,24 @@ def train_behavior_cloning_with_expert_model(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     # 设置优化器
-    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
+    optimizer = optim.Adam(policy.parameters(), lr=config.learning_rate)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='max', factor=0.5, patience=3, verbose=True
     )
     
-    # 设置损失函数
+    # 设置损失函数 - 使用交叉熵作为监督学习的损失函数
     criterion = nn.CrossEntropyLoss()
     
     # 训练循环
     best_accuracy = 0
+    early_stopping_patience = 10
+    no_improvement_count = 0
     
     for epoch in range(num_epochs):
         total_loss = 0
         correct = 0
         total = 0
+        last_epoch_loss = 1e3
         
         for obs, actions in dataloader:
             # 将数据移到相应设备
@@ -331,17 +334,20 @@ def train_behavior_cloning_with_expert_model(
             actions = actions.to(device).squeeze()
             
             # 获取策略输出
-            # 使用策略网络的forward方法获取动作分布
             features = policy.extract_features(obs)
             latent_pi, latent_vf = policy.mlp_extractor(features)
             action_logits = policy.action_net(latent_pi)
             
-            # 计算损失
+            # 计算监督学习损失 - 交叉熵
             loss = criterion(action_logits, actions)
             
             # 反向传播
             optimizer.zero_grad()
             loss.backward()
+            
+            # 梯度裁剪
+            torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
+            
             optimizer.step()
             
             total_loss += loss.item()
@@ -358,6 +364,8 @@ def train_behavior_cloning_with_expert_model(
         # 更新学习率
         scheduler.step(epoch_accuracy)
         
+        last_epoch_loss = epoch_loss
+        
         # 打印训练信息
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
         
@@ -367,6 +375,16 @@ def train_behavior_cloning_with_expert_model(
             best_model_path = os.path.join(model_save_path, "bc_best_model")
             model.save(best_model_path)
             print(f"保存最佳模型，准确率: {best_accuracy:.2f}%")
+        
+        if epoch_loss - last_epoch_loss < 1e-3:
+            no_improvement_count += 1
+        else:
+            no_improvement_count = 0
+        
+        # 早停检查
+        if no_improvement_count >= early_stopping_patience:
+            print(f"早停: {early_stopping_patience}轮内损失无提升")
+            break
     
     # 保存最终模型
     final_model_path = os.path.join(model_save_path, "bc_final_model")

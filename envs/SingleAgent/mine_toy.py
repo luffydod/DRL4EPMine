@@ -24,7 +24,7 @@ def IsOpen(port, ip='127.0.0.1'):
 
 TEAM_NAME = 'ControlEP?team=0'
 AGENT_ID = 0
-IMAGE_SIZE = 224
+IMAGE_SIZE = 128
 
 def warp_action(action):
     action_dict = {'{}_{}'.format(TEAM_NAME, AGENT_ID): action}
@@ -42,7 +42,7 @@ class EpMineEnv(gym.Env):
                  only_image: bool = True,
                  only_state: bool = False,
                  no_graph: bool = True,
-                 norm_image: bool = True,
+                #  norm_image: bool = False, # to be deprecated
                  discrete_action: bool = True,
                  verbose: bool = False,
                  log_file: str = "logs/env_logs.txt",
@@ -52,7 +52,7 @@ class EpMineEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.discrete_action = discrete_action
-        self.norm_image = norm_image
+        # self.norm_image = norm_image
         self.verbose = verbose
         self.log_file = log_file
         # 确保日志目录存在
@@ -97,14 +97,13 @@ class EpMineEnv(gym.Env):
         self.catch_state = 0
         
         if self.only_image:
-            if self.norm_image:
-                self.observation_space = spaces.Box(
-                    low=0, high=1, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.float32
-                )
-            else:
-                self.observation_space = spaces.Box(
-                    low=0, high=255, shape=(IMAGE_SIZE, IMAGE_SIZE, 3), dtype=np.uint8
-                )
+            # if self.norm_image:
+            #     self.observation_space = spaces.Box(
+            #         low=0, high=1, shape=(3, IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32
+            #     )
+            self.observation_space = spaces.Box(
+                low=0, high=255, shape=(3, IMAGE_SIZE, IMAGE_SIZE), dtype=np.uint8
+            )
         elif self.only_state:
             self.observation_space = spaces.Box(
                 low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32
@@ -297,8 +296,11 @@ class EpMineEnv(gym.Env):
             img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
             # 调整图像大小以匹配观察空间
             img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-            if self.norm_image:
-                img = img.astype(np.float32) / 255.0
+            # if self.norm_image:
+            #     img = img.astype(np.float32) / 255.0
+            
+            # [H, W, C] -> [C, H, W]
+            img = img.transpose(2, 0, 1)
             return img
         
         elif self.only_state:
@@ -308,8 +310,12 @@ class EpMineEnv(gym.Env):
             img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
             # 调整图像大小以匹配观察空间
             img = cv.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-            if self.norm_image:
-                img = img.astype(np.float32) / 255.0
+            
+            # if self.norm_image:
+            #     img = img.astype(np.float32) / 255.0
+            
+            # [H, W, C] -> [C, H, W]
+            img = img.transpose(2, 0, 1)
             # rotation = org_obs[1][AGENT_ID][0:4]
             # position = org_obs[1][AGENT_ID][4:7]
             # arm_angle = org_obs[1][AGENT_ID][7]
