@@ -114,13 +114,14 @@ def train(args, config):
 def test(args, config, no_graph=False, save_video=False, random_action=False):
     try:
         import time 
-        
+        import random
+        # random.seed(config.seed)
         # 创建环境
         env = EpMineEnv(
             file_name=config.file_name,
             no_graph=no_graph,
             seed=config.seed,
-            verbose=True,
+            verbose=False,
             render_mode="human",
             only_image=config.only_image,
             only_state=config.only_state
@@ -152,6 +153,7 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
                 ppo_policy = ResNetPolicy
                 
             # 创建PPO模型
+            # model = PPO.load(args.model_path, env=env)
             model = PPO(
                 ppo_policy,
                 env, 
@@ -183,34 +185,43 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         done = False
         step = 0
         total_reward = 0
-        
-        while not done:
-            print(time.time())
-            if random_action:
-                action = env.action_space.sample()
-            else:
-                action, _state = model.predict(obs, deterministic=True)
+        success_count = 0
+        for i in range(20):
+            done = False
+            step = 0
+            total_reward = 0
+            obs, _ = env.reset()
+            while not done:
+                print(time.time())
+                if random_action:
+                    action = env.action_space.sample()
+                else:
+                    action, _state = model.predict(obs, deterministic=True)
+                    
+                next_obs, reward, terminated, truncated, info = env.step(action)
+                obs = next_obs.copy()
                 
-            next_obs, reward, terminated, truncated, info = env.step(action)
-            obs = next_obs.copy()
-            
-            done = terminated or truncated
-            total_reward += reward
-            if save_video:
-                frame = next_obs.copy()
-                frames.append(frame)
-            
-            position = info["robot_position"]
-            print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
-            print('----------------------------------------')
-            step += 1
-            # time.sleep(0.1)
-            if step > 1000:
-                break
+                done = terminated or truncated
+                total_reward += reward
+                if save_video:
+                    frame = next_obs.copy()
+                    frames.append(frame)
+                
+                position = info["robot_position"]
+                # print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
+                # print('----------------------------------------')
+                step += 1
+                # time.sleep(0.1)
+                if step > 1000:
+                    break
+            if total_reward > 9.0:
+                success_count += 1
+            print(f"第{i}次测试结束")
+            print(f"总奖励: {total_reward}")
+            print(f"总步数: {step}")
         
-        print(f"总奖励: {total_reward}")
-        print(f"总步数: {step}")
         
+        print(f"成功次数: {success_count}")
         if save_video:
             # 将收集的帧写入视频
             for frame in frames:
@@ -536,7 +547,7 @@ if __name__ == "__main__":
     if args.action == "train":
         train(args, config)
     elif args.action == "test":
-        test(args, config, no_graph=False, save_video=args.video, random_action=False)
+        test(args, config, no_graph=True, save_video=args.video, random_action=False)
     elif args.action == "test_random":
         test(args, config, no_graph=False, save_video=args.video, random_action=True)
     elif args.action == "test_keyboard":

@@ -204,44 +204,46 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
         policy_type = CustomCnnPolicy
     
     # 加载专家模型
-    expert_model = PPO(
-                'MlpPolicy',
-                expert_env, 
-                learning_rate=config.learning_rate,
-                n_steps=config.n_steps,
-                batch_size=config.batch_size,
-                n_epochs=config.n_epochs,
-                gamma=config.gamma,
-                gae_lambda=config.gae_lambda,
-                clip_range=config.clip_range,
-                ent_coef=config.ent_coef,
-                vf_coef=config.vf_coef,
-                max_grad_norm=config.max_grad_norm,
-                verbose=config.verbose,
-                device=args.device
-            )
-    expert_model.load(expert_model_path)
+    # expert_model = PPO(
+    #             'MlpPolicy',
+    #             expert_env, 
+    #             learning_rate=config.learning_rate,
+    #             n_steps=config.n_steps,
+    #             batch_size=config.batch_size,
+    #             n_epochs=config.n_epochs,
+    #             gamma=config.gamma,
+    #             gae_lambda=config.gae_lambda,
+    #             clip_range=config.clip_range,
+    #             ent_coef=config.ent_coef,
+    #             vf_coef=config.vf_coef,
+    #             max_grad_norm=config.max_grad_norm,
+    #             verbose=config.verbose,
+    #             device=args.device
+    #         )
+    expert_model = PPO.load(expert_model_path, env=expert_env)
     
-    # 创建PPO模型（我们只使用其策略网络部分）
-    model = PPO(
-                policy_type,
-                env, 
-                learning_rate=config.learning_rate,
-                n_steps=config.n_steps,
-                batch_size=config.batch_size,
-                n_epochs=config.n_epochs,
-                gamma=config.gamma,
-                gae_lambda=config.gae_lambda,
-                clip_range=config.clip_range,
-                ent_coef=config.ent_coef,
-                vf_coef=config.vf_coef,
-                max_grad_norm=config.max_grad_norm,
-                verbose=config.verbose,
-                device=args.device,
-                policy_kwargs={"normalize_images": False},
-            )
     if load_model_path:
-        model.load(load_model_path)
+        model = PPO.load(load_model_path, env=env)
+        # model.load(load_model_path)
+    else:
+        # 创建PPO模型（我们只使用其策略网络部分）
+        model = PPO(
+                    policy_type,
+                    env, 
+                    learning_rate=config.learning_rate,
+                    n_steps=config.n_steps,
+                    batch_size=config.batch_size,
+                    n_epochs=config.n_epochs,
+                    gamma=config.gamma,
+                    gae_lambda=config.gae_lambda,
+                    clip_range=config.clip_range,
+                    ent_coef=config.ent_coef,
+                    vf_coef=config.vf_coef,
+                    max_grad_norm=config.max_grad_norm,
+                    verbose=config.verbose,
+                    device=args.device,
+                    policy_kwargs={"normalize_images": False},
+                )    
     
     # 设置策略网络
     expert_policy = expert_model.policy
@@ -278,7 +280,7 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
         
         obs, _ = expert_env.reset()
         print(f"episode step: {episode_steps}, episode reward: {episode_reward:.2f}")
-        if episode_reward > 1.0:
+        if episode_reward > 9.0:
             expert_data.extend(episode_data)
             total_steps += episode_steps
             print(f"total steps: {total_steps}")
