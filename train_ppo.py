@@ -33,21 +33,21 @@ def train(args, config):
             vec_env_cls=DummyVecEnv,
             env_kwargs={
                 "file_name": config.file_name,
-                "no_graph": True,
+                "no_graph": False,
                 "only_image": config.only_image,
                 "only_state": config.only_state
             }
         )
         
         # 添加 VecNormalize 包装器
-        env = VecNormalize(
-            env,
-            norm_obs=False,  # 不标准化图像观察
-            norm_reward=True,  # 标准化奖励
-            clip_reward=10.0,
-            gamma=config.gamma,
-            epsilon=1e-8
-        )
+        # env = VecNormalize(
+        #     env,
+        #     norm_obs=True,  # 不标准化图像观察
+        #     norm_reward=True,  # 标准化奖励
+        #     clip_reward=10.0,
+        #     gamma=config.gamma,
+        #     epsilon=1e-8
+        # )
         
         # 设置保存模型的回调
         checkpoint_callback = CheckpointCallback(
@@ -113,7 +113,8 @@ def train(args, config):
 
 def test(args, config, test_episode=10, no_graph=False, save_video=False, random_action=False):
     try:
-        import time 
+        import time
+        import numpy as np
         
         # 创建环境
         env = EpMineEnv(
@@ -156,12 +157,15 @@ def test(args, config, test_episode=10, no_graph=False, save_video=False, random
         total_reward = 0
         success_count = 0
         for i in range(test_episode):
+            obs_list = []
+            
             done = False
             step = 0
             total_reward = 0
             obs, _ = env.reset()
             while not done:
-                print(time.time())
+                obs_list.append(obs.copy())
+                
                 if random_action:
                     action = env.action_space.sample()
                 else:
@@ -178,16 +182,16 @@ def test(args, config, test_episode=10, no_graph=False, save_video=False, random
                 
                 position = info["robot_position"]
                 # print(f"步骤: {step}, 奖励: {reward}, 位置: ({position[0]}, {position[2]})")
-                # print('----------------------------------------')
                 step += 1
-                # time.sleep(0.1)
-                if step > 1000:
-                    break
+                
+            # 输出obs的分布信息
+            obs_data = np.array(obs_list, dtype=np.float32)
+            print(f"obs_data shape: {obs_data.shape}")
+            print(f"obs_data min: {obs_data.min()}, max: {obs_data.max()}, mean: {obs_data.mean()}, std: {obs_data.std()}")
+            
             if total_reward > 9.0:
                 success_count += 1
-            print(f"第{i}次测试结束")
-            print(f"总奖励: {total_reward}")
-            print(f"总步数: {step}")
+            print(f"episode-{i}: 总奖励: {total_reward} 总步数: {step}")
         
         
         print(f"成功次数: {success_count}")

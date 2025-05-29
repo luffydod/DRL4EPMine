@@ -96,8 +96,7 @@ export XAUTHORITY=$HOME/.Xauthority
 运行程序
 
 ```bash
-# 【已解决】挂载目录权限问题，暂时用sudo解决
-sudo python3 train_ppo.py
+python3 train_ppo.py
 ```
 
 ### 关闭可视化界面
@@ -116,6 +115,13 @@ mlagents-envs提供了`no-graphics`仿真模式，但是在该模式下图像不
 需要注意的是，上述修改方式虽然支持关闭可视化窗口，但是在服务器（无显示）端仅修改上述代码而不适用docker的情况下，仍然不能正常渲染图像。
 
 ***警告***：上述代码涉及修改mlagents-envs源码，请谨慎使用。
+
+补充(沉痛教训): `no_graph = True` 的情况下获取观测空间的图像数据会出现问题,也就是恒定的黑屏图片数据!
+
+```bash
+# 调试发现
+obs_data min: 205, max: 205, mean: 205.0, std: 0.0
+```
 
 ## 仿真环境下载
 

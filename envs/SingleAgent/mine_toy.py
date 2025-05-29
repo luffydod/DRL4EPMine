@@ -41,7 +41,7 @@ class EpMineEnv(gym.Env):
                  max_episode_steps: int = 1000,
                  only_image: bool = True,
                  only_state: bool = False,
-                 no_graph: bool = True,
+                 no_graph: bool = False,
                 #  norm_image: bool = False, # to be deprecated
                  discrete_action: bool = True,
                  verbose: bool = False,
@@ -292,6 +292,13 @@ class EpMineEnv(gym.Env):
 
     def decoder_results(self, results):
         org_obs = results[TEAM_NAME].obs
+        
+        # print(f"shape of org_obs[0]: {org_obs[0][AGENT_ID].shape}")
+        # print(f"mean of org_obs[0]: {org_obs[0][AGENT_ID].mean()}")
+        # print(f"min of org_obs[0]: {org_obs[0][AGENT_ID].min()}")
+        # print(f"max of org_obs[0]: {org_obs[0][AGENT_ID].max()}")
+        # print(f"std of org_obs[0]: {org_obs[0][AGENT_ID].std()}")
+        
         if self.only_image:
             img = cv.cvtColor(np.array(org_obs[0][AGENT_ID] * 255, dtype=np.uint8), cv.COLOR_RGB2BGR)
             # 调整图像大小以匹配观察空间

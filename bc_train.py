@@ -22,7 +22,7 @@ class ExpertDataset(Dataset):
         
     def process_data(self):
         for data in self.expert_data:
-            data['observation'] = torch.FloatTensor(data['observation'])
+            data['observation'] = torch.FloatTensor(data['observation'] / 255.0)
             if isinstance(data['action'], np.ndarray):
                 if data['action'].ndim == 0:
                     data['action'] = data['action'].item()
@@ -34,15 +34,59 @@ class ExpertDataset(Dataset):
     def __getitem__(self, idx):
         return self.expert_data[idx]
 
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha  # 类别权重
+        self.reduction = reduction
+        
+    def forward(self, inputs, targets):
+        ce_loss = nn.functional.cross_entropy(inputs, targets, reduction='none', weight=self.alpha)
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+        
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
 def train_policy_model(model, dataloader, device, num_epochs, model_save_path):
     policy = model.policy
     policy.set_training_mode(True)
     
     # 设置优化器
-    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    optimizer = optim.Adam(policy.parameters(), lr=5e-4, weight_decay=1e-5)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer)
     
-    # 设置损失函数 - 使用交叉熵作为监督学习的损失函数
+    # 计算数据集中各动作的权重
+    action_counts = {}
+    for batch in dataloader:
+        actions = batch['action']
+        for action in actions:
+            action_item = action.item()
+            if action_item not in action_counts:
+                action_counts[action_item] = 0
+            action_counts[action_item] += 1
+    
+    # 计算权重（反比于频率）
+    num_samples = sum(action_counts.values())
+    num_classes = len(action_counts)
+    class_weights = torch.zeros(num_classes)
+    for action, count in action_counts.items():
+        class_weights[action] = num_samples / (count * num_classes)
+    
+    class_weights = class_weights.to(device)
+    print(f"类别权重: {class_weights}")
+    
+    # 使用焦点损失
+    # criterion = FocalLoss(alpha=class_weights, gamma=2.0)
+    
+    # 使用带标签平滑的交叉熵
+    # criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+    
     criterion = nn.CrossEntropyLoss()
     
     # 训练循环
@@ -87,7 +131,7 @@ def train_policy_model(model, dataloader, device, num_epochs, model_save_path):
         epoch_accuracy = 100 * correct / total
         
         # 更新学习率
-        scheduler.step(epoch_accuracy)
+        # scheduler.step(epoch_accuracy)
         
         # 打印训练信息
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
@@ -156,7 +200,7 @@ def train_behavior_cloning_with_expert_model(
     
     expert_env = EpMineEnv(
         file_name=config.file_name,
-        no_graph=True,
+        no_graph=False,
         only_image=False,
         only_state=False,
         max_episode_steps=512,
@@ -272,8 +316,8 @@ def train_behavior_cloning_with_expert_model(
             action, _states = expert_policy.predict(obs['state'])
             # print(f"type of action: {type(action)}") numpy.ndarray
             episode_data.append({
-                'observation': obs['image'],
-                'action': action
+                'observation': obs['image'].copy(),
+                'action': action.copy()
             })
             next_obs, reward, terminated, truncated, info = expert_env.step(action)
             done = terminated or truncated
@@ -301,7 +345,11 @@ def train_behavior_cloning_with_expert_model(
     for action, count in action_counts.items():
         print(f"动作 {action}: {count} 样本 ({100*count/len(expert_data):.2f}%)")
         
-        
+    # 检查obs分布
+    obs_data = np.array([data['observation'].copy() for data in expert_data])
+    print(f"obs_data shape: {obs_data.shape}")
+    print(f"obs_data min: {obs_data.min()}, max: {obs_data.max()}, mean: {obs_data.mean()}, std: {obs_data.std()}")
+    
     # 加载专家数据
     dataset = ExpertDataset(expert_data=expert_data)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)

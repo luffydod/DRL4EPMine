@@ -7,7 +7,7 @@ class PPOConfig:
     # 环境相关配置
     env_id: str = "EpMineEnv-v0"
     num_envs: int = 1
-    seed: int = 2321 # 224
+    seed: int = 3321 # 224
     only_image: bool = True
     only_state: bool = False
     
@@ -25,7 +25,7 @@ class PPOConfig:
     
     # 训练相关配置
     total_timesteps: int = int(1e5)
-    policy: str = "resnet"
+    policy: str = "cnn"
     """ choose from 
         'cnn', -- 默认的CNN策略
         'mlp', -- 默认的MLP策略
@@ -43,4 +43,4 @@ class PPOConfig:
     file_name: str = "MineField_Windows-0510-random/drl.exe" if platform.system() == "Windows" else "MineField_Linux-0510-random/drl.x86_64"
     port: int = 30001
     work_id: int = 0
-    time_scale: float = 1.0
+    time_scale: float = 20.0
