@@ -111,11 +111,10 @@ def train(args, config):
         print("环境已关闭")
         env.close()
 
-def test(args, config, no_graph=False, save_video=False, random_action=False):
+def test(args, config, test_episode=10, no_graph=False, save_video=False, random_action=False):
     try:
         import time 
-        import random
-        # random.seed(config.seed)
+        
         # 创建环境
         env = EpMineEnv(
             file_name=config.file_name,
@@ -124,7 +123,8 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
             verbose=False,
             render_mode="human",
             only_image=config.only_image,
-            only_state=config.only_state
+            only_state=config.only_state,
+            time_scale=config.time_scale
         )
         
         obs, _= env.reset()
@@ -139,39 +139,8 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
             video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
         
         if not random_action:
-            
-            # 创建PPO模型，使用自定义策略
-            if config.policy == 'mlp':
-                ppo_policy = 'MlpPolicy'
-            elif config.policy == 'cnn':
-                ppo_policy = 'CnnPolicy'
-            elif config.policy == 'cnn_custom':
-                from policy_network import CustomCnnPolicy
-                ppo_policy = CustomCnnPolicy
-            elif config.policy == 'resnet':
-                from policy_network import ResNetPolicy
-                ppo_policy = ResNetPolicy
-                
-            # 创建PPO模型
-            # model = PPO.load(args.model_path, env=env)
-            model = PPO(
-                ppo_policy,
-                env, 
-                learning_rate=config.learning_rate,
-                n_steps=config.n_steps,
-                batch_size=config.batch_size,
-                n_epochs=config.n_epochs,
-                gamma=config.gamma,
-                gae_lambda=config.gae_lambda,
-                clip_range=config.clip_range,
-                ent_coef=config.ent_coef,
-                vf_coef=config.vf_coef,
-                max_grad_norm=config.max_grad_norm,
-                verbose=config.verbose,
-                device=args.device
-            )
-            # load model
-            model.load(args.model_path, device=args.device)
+            # 加载PPO模型
+            model = PPO.load(args.model_path, env=env)
             
             # set eval
             model.policy.set_training_mode(False)
@@ -186,7 +155,7 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         step = 0
         total_reward = 0
         success_count = 0
-        for i in range(20):
+        for i in range(test_episode):
             done = False
             step = 0
             total_reward = 0
@@ -238,7 +207,7 @@ def test(args, config, no_graph=False, save_video=False, random_action=False):
         if 'video_writer' in locals() and video_writer is not None:
             video_writer.release()
 
-def test_keyboard(args, config, no_graph=False, save_video=False):
+def test_keyboard(config, no_graph=False, save_video=False):
     try:
         import time
         import cv2 as cv
@@ -375,7 +344,7 @@ def test_keyboard(args, config, no_graph=False, save_video=False):
         if 'video_writer' in locals() and video_writer is not None:
             video_writer.release()
             
-def collect_expert_data(args, config, no_graph=False):
+def collect_expert_data(config, no_graph=False):
     try:
         import time
         import keyboard
@@ -547,12 +516,20 @@ if __name__ == "__main__":
     if args.action == "train":
         train(args, config)
     elif args.action == "test":
-        test(args, config, no_graph=True, save_video=args.video, random_action=False)
+        test(args, config, 
+             test_episode=10, 
+             no_graph=False, 
+             save_video=args.video, 
+             random_action=False)
     elif args.action == "test_random":
-        test(args, config, no_graph=False, save_video=args.video, random_action=True)
+        test(args, config, 
+             test_episode=10, 
+             no_graph=False, 
+             save_video=args.video, 
+             random_action=True)
     elif args.action == "test_keyboard":
-        test_keyboard(args, config, no_graph=False, save_video=args.video)
+        test_keyboard(config, no_graph=False, save_video=args.video)
     elif args.action == "collect_expert_data":
-        collect_expert_data(args, config, no_graph=False)
+        collect_expert_data(config, no_graph=False)
     else:
         raise ValueError(f"无效的运行模式: {args.action}")

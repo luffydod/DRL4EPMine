@@ -98,10 +98,12 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
             obs = obs.to(device)
             actions = actions.to(device).squeeze()
             
-            # 直接使用策略网络的前向传播
-            # 注意：这里不使用model.predict，因为那是用于推理
-            distribution = policy.get_distribution(obs)
-            action_logits = distribution.distribution.logits
+            # 获取策略输出
+            # 注意：model.predict用于推理，这里我们直接使用策略网络进行前向传播
+            # 使用策略网络的forward方法获取动作分布
+            features = policy.extract_features(obs)
+            latent_pi, latent_vf = policy.mlp_extractor(features)
+            action_logits = policy.action_net(latent_pi)
             
             # 计算损失
             loss = criterion(action_logits, actions)
@@ -141,7 +143,11 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
     # 关闭资源
     env.close()
 
-def train_behavior_cloning_with_expert_model(config, expert_model_path, model_save_path, load_model_path=None, num_epochs=10, batch_size=32, device='auto', n_steps=1000):
+def train_behavior_cloning_with_expert_model(
+    config, expert_model_path, model_save_path, 
+    load_model_path=None, num_epochs=10, batch_size=32, 
+    device='auto', n_steps=1000):
+    
     # 创建环境实例（仅用于获取空间信息）
     from envs.SingleAgent.mine_toy import EpMineEnv
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
@@ -285,10 +291,23 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
             total_steps += episode_steps
             print(f"total steps: {total_steps}")
     
+    # 检查数据集的动作分布
+    action_counts = {}
+    for data in expert_data:
+        action = data['action'].item() if isinstance(data['action'], np.ndarray) else data['action']
+        if action not in action_counts:
+            action_counts[action] = 0
+        action_counts[action] += 1
+    
+    print("动作分布统计:")
+    for action, count in action_counts.items():
+        print(f"动作 {action}: {count} 样本 ({100*count/len(expert_data):.2f}%)")
+        
+        
     # 加载专家数据
     dataset = ExpertDataset(expert_data=expert_data)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-        
+    
     # 设置优化器
     optimizer = optim.Adam(policy.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -311,10 +330,11 @@ def train_behavior_cloning_with_expert_model(config, expert_model_path, model_sa
             obs = obs.to(device)
             actions = actions.to(device).squeeze()
             
-            # 直接使用策略网络的前向传播
-            # 注意：这里不使用model.predict，因为那是用于推理
-            distribution = policy.get_distribution(obs)
-            action_logits = distribution.distribution.logits
+            # 获取策略输出
+            # 使用策略网络的forward方法获取动作分布
+            features = policy.extract_features(obs)
+            latent_pi, latent_vf = policy.mlp_extractor(features)
+            action_logits = policy.action_net(latent_pi)
             
             # 计算损失
             loss = criterion(action_logits, actions)
