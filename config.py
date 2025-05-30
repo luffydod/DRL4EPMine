@@ -27,10 +27,11 @@ class PPOConfig:
     total_timesteps: int = int(5e5)
     policy: str = "cnn"
     """ choose from 
-        'cnn', -- 默认的CNN策略
-        'mlp', -- 默认的MLP策略
-        'resnet', -- 自定义的ResNet策略
-        'cnn_custom' -- 自定义的CNN策略
+        'cnn', -- 默认的CNN策略网络
+        'mlp', -- 默认的MLP策略网络
+        'resnet', -- 自定义的ResNet策略网络
+        'cnn_custom' -- 自定义的CNN策略网络
+        'cnn_pro' -- 改进NatureCNN策略网络
     """
     verbose: int = 1
     tensorboard_log: str = "tblogs"

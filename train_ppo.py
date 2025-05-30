@@ -10,6 +10,16 @@ from envs.SingleAgent.mine_toy import EpMineEnv
 from ppo_custom import FilteredPPO
 from config import PPOConfig
 
+from policy_network import CustomCnnPolicy, ResNetPolicy, NatureCnnproPolicy
+
+ppo_policy = {
+    'mlp': 'MlpPolicy',
+    'cnn': 'CnnPolicy',
+    'cnn_custom': CustomCnnPolicy,
+    'resnet': ResNetPolicy,
+    'cnn_pro': NatureCnnproPolicy,
+}
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description="PPO运行参数")
@@ -60,20 +70,9 @@ def train(args, config, algorithm="ppo"):
         )
         
         # 创建PPO模型，使用自定义策略
-        if config.policy == 'mlp':
-            ppo_policy = 'MlpPolicy'
-        elif config.policy == 'cnn':
-            ppo_policy = 'CnnPolicy'
-        elif config.policy == 'cnn_custom':
-            from policy_network import CustomCnnPolicy
-            ppo_policy = CustomCnnPolicy
-        elif config.policy == 'resnet':
-            from policy_network import ResNetPolicy
-            ppo_policy = ResNetPolicy
-            
         if algorithm == "ppo":
             model = PPO(
-                ppo_policy,
+                ppo_policy[config.policy],
                 env, 
                 learning_rate=config.learning_rate,
                 n_steps=config.n_steps,
@@ -91,7 +90,7 @@ def train(args, config, algorithm="ppo"):
             )
         elif algorithm == "ppo_custom":
             model = FilteredPPO(
-                ppo_policy,
+                ppo_policy[config.policy],
                 env, 
                 reward_threshold=-8.0,
                 learning_rate=config.learning_rate,

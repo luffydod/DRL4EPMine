@@ -8,6 +8,16 @@ from torch.utils.data import Dataset, DataLoader
 import pickle
 from stable_baselines3 import PPO
 
+from policy_network import CustomCnnPolicy, ResNetPolicy, NatureCnnproPolicy
+
+ppo_policy = {
+    'mlp': 'MlpPolicy',
+    'cnn': 'CnnPolicy',
+    'cnn_custom': CustomCnnPolicy,
+    'resnet': ResNetPolicy,
+    'cnn_pro': NatureCnnproPolicy,
+}
+
 class ExpertDataset(Dataset):
     def __init__(self, expert_data_path=None, expert_data=None):
         if expert_data_path:
@@ -163,21 +173,9 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
         only_state=False
     )
     
-    # 创建策略网络
-    if config.policy == 'cnn':
-        policy_type = 'CnnPolicy'
-    elif config.policy == 'resnet':
-        from policy_network import ResNetPolicy
-        policy_type = ResNetPolicy
-    elif config.policy == 'cnn_custom':
-        from policy_network import CustomCnnPolicy
-        policy_type = CustomCnnPolicy
-    else:
-        raise ValueError(f"不支持的策略类型: {config.policy}")
-    
     # 创建PPO模型（我们只使用其策略网络部分）
     model = PPO(
-        policy_type,
+        ppo_policy[config.policy],
         env,
         learning_rate=config.learning_rate,
         device=device
@@ -242,18 +240,6 @@ def train_behavior_cloning_with_expert_model(
     #         }
     #     )
     
-    # 创建策略网络
-    if config.policy == 'cnn':
-        policy_type = 'CnnPolicy'
-    elif config.policy == 'mlp':
-        policy_type = 'MlpPolicy'
-    elif config.policy == 'resnet':
-        from policy_network import ResNetPolicy
-        policy_type = ResNetPolicy
-    elif config.policy == 'cnn_custom':
-        from policy_network import CustomCnnPolicy
-        policy_type = CustomCnnPolicy
-    
     # 加载专家模型
     # expert_model = PPO(
     #             'MlpPolicy',
@@ -279,7 +265,7 @@ def train_behavior_cloning_with_expert_model(
     else:
         # 创建PPO模型（我们只使用其策略网络部分）
         model = PPO(
-                    policy_type,
+                    ppo_policy[config.policy],
                     env, 
                     learning_rate=config.learning_rate,
                     n_steps=config.n_steps,
