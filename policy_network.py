@@ -71,9 +71,7 @@ class ResNetFeaturesExtractor(BaseFeaturesExtractor):
         )
         
     def forward(self, observations):
-        # 转置输入以匹配PyTorch的期望格式
-        observations_channels_first = observations.permute(0, 3, 1, 2)  # NHWC -> NCHW
-        return self.linear(self.resnet(observations_channels_first))
+        return self.linear(self.resnet(observations))
     
 class ResNetPolicy(ActorCriticCnnPolicy):
     def __init__(self, *args, **kwargs):

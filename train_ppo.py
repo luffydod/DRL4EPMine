@@ -7,6 +7,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
 from envs.SingleAgent.mine_toy import EpMineEnv
 
+from ppo_custom import FilteredPPO
 from config import PPOConfig
 
 def parse_args():
@@ -20,7 +21,7 @@ def parse_args():
     
     return parser.parse_args()
 
-def train(args, config):
+def train(args, config, algorithm="ppo"):
     try:
         # 确保目录存在
         os.makedirs(config.save_path, exist_ok=True)
@@ -70,23 +71,43 @@ def train(args, config):
             from policy_network import ResNetPolicy
             ppo_policy = ResNetPolicy
             
-        model = PPO(
-            ppo_policy,
-            env, 
-            learning_rate=config.learning_rate,
-            n_steps=config.n_steps,
-            batch_size=config.batch_size,
-            n_epochs=config.n_epochs,
-            gamma=config.gamma,
-            gae_lambda=config.gae_lambda,
-            clip_range=config.clip_range,
-            ent_coef=config.ent_coef,
-            vf_coef=config.vf_coef,
-            max_grad_norm=config.max_grad_norm,
-            verbose=config.verbose,
-            device=args.device,
-            tensorboard_log=config.tensorboard_log
-        )
+        if algorithm == "ppo":
+            model = PPO(
+                ppo_policy,
+                env, 
+                learning_rate=config.learning_rate,
+                n_steps=config.n_steps,
+                batch_size=config.batch_size,
+                n_epochs=config.n_epochs,
+                gamma=config.gamma,
+                gae_lambda=config.gae_lambda,
+                clip_range=config.clip_range,
+                ent_coef=config.ent_coef,
+                vf_coef=config.vf_coef,
+                max_grad_norm=config.max_grad_norm,
+                verbose=config.verbose,
+                device=args.device,
+                tensorboard_log=config.tensorboard_log
+            )
+        elif algorithm == "ppo_custom":
+            model = FilteredPPO(
+                ppo_policy,
+                env, 
+                reward_threshold=-8.0,
+                learning_rate=config.learning_rate,
+                n_steps=config.n_steps,
+                batch_size=config.batch_size,
+                n_epochs=config.n_epochs,
+                gamma=config.gamma,
+                gae_lambda=config.gae_lambda,
+                clip_range=config.clip_range,
+                ent_coef=config.ent_coef,
+                vf_coef=config.vf_coef,
+                max_grad_norm=config.max_grad_norm,
+                verbose=config.verbose,
+                device=args.device,
+                tensorboard_log=config.tensorboard_log
+            )
         
         # 加载模型
         if args.model_path:
@@ -113,7 +134,12 @@ def train(args, config):
         print("环境已关闭")
         env.close()
 
-def test(args, config, test_episode=10, no_graph=False, save_video=False, random_action=False):
+def test(args, config, 
+         test_episode=10, 
+         no_graph=False, 
+         save_video=False, 
+         random_action=False, 
+         algorithm="ppo"):
     try:
         import time
         import numpy as np
@@ -143,7 +169,10 @@ def test(args, config, test_episode=10, no_graph=False, save_video=False, random
         
         if not random_action:
             # 加载PPO模型
-            model = PPO.load(args.model_path, env=env)
+            if algorithm == "ppo":
+                model = PPO.load(args.model_path, env=env)
+            elif algorithm == "ppo_custom":
+                model = FilteredPPO.load(args.model_path, env=env)
             
             # set eval
             model.policy.set_training_mode(False)
@@ -158,6 +187,7 @@ def test(args, config, test_episode=10, no_graph=False, save_video=False, random
         step = 0
         total_reward = 0
         success_count = 0
+        success_episode_length = []
         for i in range(test_episode):
             obs_list = []
             
@@ -193,10 +223,12 @@ def test(args, config, test_episode=10, no_graph=False, save_video=False, random
             
             if total_reward > 9.0:
                 success_count += 1
+                success_episode_length.append(step)
             print(f"episode-{i}: 总奖励: {total_reward} 总步数: {step}")
         
+        print(f"成功次数: {success_count}, 成功率: {((success_count / test_episode) * 100):.2f}%")
+        print(f"成功回合平均步数: {np.mean(success_episode_length):.1f}")
         
-        print(f"成功次数: {success_count}")
         if save_video:
             # 将收集的帧写入视频
             for frame in frames:
@@ -247,9 +279,9 @@ def test_keyboard(config, no_graph=False, save_video=False):
             's': 3,  # 向后
             'a': 1,  # 向左
             'd': 0,  # 向右
-            'q': 5,  # 动作4
-            'e': 4,   # 动作5,
-            ' ': 6,   # 动作6
+            'q': 5,  # 左转
+            'e': 4,   # 右转,
+            ' ': 6,   # 不动
         }
         
         # 显示键位说明
