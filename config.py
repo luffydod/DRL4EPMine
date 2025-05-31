@@ -14,7 +14,7 @@ class PPOConfig:
     # PPO算法超参数
     learning_rate: float = 3e-4
     n_steps: int = 2048
-    batch_size: int = 32
+    batch_size: int = 64
     n_epochs: int = 10
     gamma: float = 0.99
     gae_lambda: float = 0.95
@@ -32,6 +32,7 @@ class PPOConfig:
         'resnet', -- 自定义的ResNet策略网络
         'cnn_custom' -- 自定义的CNN策略网络
         'cnn_pro' -- 改进NatureCNN策略网络
+        'lstm_cnn' -- RecurrentPPO策略网络
     """
     verbose: int = 1
     tensorboard_log: str = "tblogs"
@@ -44,4 +45,4 @@ class PPOConfig:
     file_name: str = "MineField_Windows-0510-random/drl.exe" if platform.system() == "Windows" else "MineField_Linux-0510-random/drl.x86_64"
     port: int = 30001
     work_id: int = 0
-    time_scale: float = 20
+    time_scale: float = 100

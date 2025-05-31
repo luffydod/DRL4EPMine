@@ -1,18 +1,22 @@
 import os
 import argparse
+from envs.SingleAgent.mine_toy import EpMineEnv
+from ppo_custom import FilteredPPO
+from config import PPOConfig
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
-from envs.SingleAgent.mine_toy import EpMineEnv
+from sb3_contrib import RecurrentPPO
 
-from ppo_custom import FilteredPPO
-from config import PPOConfig
+from policy_network import (
+    CustomCnnPolicy, 
+    ResNetPolicy, 
+    NatureCnnproPolicy,
+)
 
-from policy_network import CustomCnnPolicy, ResNetPolicy, NatureCnnproPolicy
-
-PPO_NAME = "ppo"
+PPO_NAME = "ppo_recurrent"
 
 ppo_policy = {
     'mlp': 'MlpPolicy',
@@ -20,6 +24,7 @@ ppo_policy = {
     'cnn_custom': CustomCnnPolicy,
     'resnet': ResNetPolicy,
     'cnn_pro': NatureCnnproPolicy,
+    'lstm_cnn': "CnnLstmPolicy",
 }
 
 def parse_args():
@@ -90,6 +95,7 @@ def train(args, config, algorithm="ppo"):
                 device=args.device,
                 tensorboard_log=config.tensorboard_log
             )
+            
         elif algorithm == "ppo_custom":
             model = FilteredPPO(
                 ppo_policy[config.policy],
@@ -109,7 +115,26 @@ def train(args, config, algorithm="ppo"):
                 device=args.device,
                 tensorboard_log=config.tensorboard_log
             )
-        
+            
+        elif algorithm == "ppo_recurrent":
+            model = RecurrentPPO(
+                ppo_policy[config.policy],
+                env,
+                learning_rate=config.learning_rate,
+                n_steps=config.n_steps,
+                batch_size=config.batch_size,
+                n_epochs=config.n_epochs,
+                gamma=config.gamma,
+                gae_lambda=config.gae_lambda,
+                clip_range=config.clip_range,
+                ent_coef=config.ent_coef,
+                vf_coef=config.vf_coef,
+                max_grad_norm=config.max_grad_norm,
+                verbose=config.verbose,
+                device=args.device,
+                tensorboard_log=config.tensorboard_log,
+            )
+            
         # 加载模型
         if args.model_path:
             model.load(args.model_path, device=args.device)
@@ -175,6 +200,8 @@ def test(args, config,
                 model = PPO.load(args.model_path, env=env)
             elif algorithm == "ppo_custom":
                 model = FilteredPPO.load(args.model_path, env=env)
+            elif algorithm == "ppo_recurrent":
+                model = RecurrentPPO.load(args.model_path, env=env)
             
             # set eval
             model.policy.set_training_mode(False)

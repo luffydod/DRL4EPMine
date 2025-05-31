@@ -176,3 +176,4 @@ class NatureCnnproPolicy(ActorCriticCnnPolicy):
             features_extractor_kwargs=dict(features_dim=128),
             **kwargs
         )
+        

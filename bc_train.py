@@ -7,8 +7,12 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 
 from policy_network import CustomCnnPolicy, ResNetPolicy, NatureCnnproPolicy
+from ppo_custom import FilteredPPO
+
+PPO_NAME = "ppo_custom"
 
 ppo_policy = {
     'mlp': 'MlpPolicy',
@@ -16,6 +20,7 @@ ppo_policy = {
     'cnn_custom': CustomCnnPolicy,
     'resnet': ResNetPolicy,
     'cnn_pro': NatureCnnproPolicy,
+    'lstm_cnn': "CnnLstmPolicy",
 }
 
 class ExpertDataset(Dataset):
@@ -95,12 +100,14 @@ def train_policy_model(model, dataloader, device, num_epochs, model_save_path):
     # criterion = FocalLoss(alpha=class_weights, gamma=2.0)
     
     # 使用带标签平滑的交叉熵
-    # criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
+    criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
     
-    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss()
     
     # 训练循环
     best_accuracy = 0
+    loss_record = []
+    accuracy_record = []
     
     for epoch in range(num_epochs):
         total_loss = 0
@@ -146,12 +153,30 @@ def train_policy_model(model, dataloader, device, num_epochs, model_save_path):
         # 打印训练信息
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
         
+        loss_record.append(epoch_loss)
+        accuracy_record.append(epoch_accuracy)
+        
         # 保存最佳模型
         if epoch_accuracy > best_accuracy:
             best_accuracy = epoch_accuracy
             best_model_path = os.path.join(model_save_path, "bc_best_model")
             model.save(best_model_path)
             print(f"保存最佳模型，准确率: {best_accuracy:.2f}%")
+    
+    # 绘制损失和准确率曲线,分为两个子图
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(loss_record, label='Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(accuracy_record, label='Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.savefig(os.path.join(model_save_path, "bc_loss_accuracy_curve.png"))
     
     # 保存最终模型
     final_model_path = os.path.join(model_save_path, "bc_final_model")
@@ -174,13 +199,28 @@ def train_behavior_cloning(expert_data_path, model_save_path, num_epochs, batch_
     )
     
     # 创建PPO模型（我们只使用其策略网络部分）
-    model = PPO(
-        ppo_policy[config.policy],
-        env,
-        learning_rate=config.learning_rate,
-        device=device
-    )
-    
+    if PPO_NAME == "ppo":
+        model = PPO(
+            ppo_policy[config.policy],
+            env,
+            learning_rate=config.learning_rate,
+            device=device
+        )
+    elif PPO_NAME == "ppo_recurrent":
+        model = RecurrentPPO(
+            ppo_policy[config.policy],
+            env,
+            learning_rate=config.learning_rate,
+            device=device
+        )
+    elif PPO_NAME == "ppo_custom":
+        model = FilteredPPO(
+            ppo_policy[config.policy],
+            env,
+            reward_threshold=-8.0,
+            learning_rate=config.learning_rate,
+            device=device
+        )
     train_policy_model(model, dataloader, device, num_epochs, model_save_path)
     
     # 关闭资源
@@ -257,14 +297,29 @@ def train_behavior_cloning_with_expert_model(
     #             verbose=config.verbose,
     #             device=args.device
     #         )
-    expert_model = PPO.load(expert_model_path, env=expert_env)
+    if PPO_NAME == "ppo":
+        expert_model = PPO.load(expert_model_path, env=expert_env)
+    elif PPO_NAME == "ppo_recurrent":
+        expert_model = RecurrentPPO.load(expert_model_path, env=expert_env)
+    elif PPO_NAME == "ppo_custom":
+        expert_model = FilteredPPO.load(expert_model_path, env=expert_env)
+    else:
+        raise ValueError(f"不支持的PPO算法: {PPO_NAME}")
     
     if load_model_path:
-        model = PPO.load(load_model_path, env=env)
-        # model.load(load_model_path)
+        if PPO_NAME == "ppo":
+            model = PPO.load(load_model_path, env=env)
+        elif PPO_NAME == "ppo_recurrent":
+            model = RecurrentPPO.load(load_model_path, env=env)
+        elif PPO_NAME == "ppo_custom":
+            model = FilteredPPO.load(load_model_path, env=env)
+        else:
+            raise ValueError(f"不支持的PPO算法: {PPO_NAME}")
+
     else:
         # 创建PPO模型（我们只使用其策略网络部分）
-        model = PPO(
+        if PPO_NAME == "ppo":
+            model = PPO(
                     ppo_policy[config.policy],
                     env, 
                     learning_rate=config.learning_rate,
@@ -279,8 +334,42 @@ def train_behavior_cloning_with_expert_model(
                     max_grad_norm=config.max_grad_norm,
                     verbose=config.verbose,
                     device=args.device,
-                    policy_kwargs={"normalize_images": False},
                 )    
+        elif PPO_NAME == "ppo_recurrent":
+            model = RecurrentPPO(
+                    ppo_policy[config.policy],
+                    env, 
+                    learning_rate=config.learning_rate,
+                    n_steps=config.n_steps,
+                    batch_size=config.batch_size,
+                    n_epochs=config.n_epochs,
+                    gamma=config.gamma,
+                    gae_lambda=config.gae_lambda,
+                    clip_range=config.clip_range,
+                    ent_coef=config.ent_coef,
+                    vf_coef=config.vf_coef,
+                    max_grad_norm=config.max_grad_norm,
+                    verbose=config.verbose,
+                    device=args.device,
+                )  
+        elif PPO_NAME == "ppo_custom":
+            model = FilteredPPO(
+                    ppo_policy[config.policy],
+                    env, 
+                    reward_threshold=-8.0,
+                    learning_rate=config.learning_rate,
+                    n_steps=config.n_steps,
+                    batch_size=config.batch_size,
+                    n_epochs=config.n_epochs,
+                    gamma=config.gamma,
+                    gae_lambda=config.gae_lambda,
+                    clip_range=config.clip_range,
+                    ent_coef=config.ent_coef,
+                    vf_coef=config.vf_coef,
+                    max_grad_norm=config.max_grad_norm,
+                    verbose=config.verbose,
+                    device=args.device,
+                )   
     
     # 设置策略网络
     expert_policy = expert_model.policy
@@ -353,7 +442,7 @@ if __name__ == "__main__":
     parser.add_argument("--expert_data_path", type=str, default="expert_data/merged_expert_data.pkl", help="专家数据路径")
     parser.add_argument("--expert_model_path", type=str, default="models/expert_model.zip", help="专家模型路径")
     parser.add_argument("--load_model_path", type=str, default=None, help="加载模型路径")
-    parser.add_argument("--model_save_path", type=str, default="models", help="模型保存路径")
+    parser.add_argument("--model_save_path", type=str, default="expert_models", help="模型保存路径")
     parser.add_argument("--batch_size", type=int, default=32, help="批量大小")
     parser.add_argument("--num_epochs", type=int, default=20, help="训练轮数")
     parser.add_argument("--n_steps", type=int, default=2048, help="收集专家数据步数")
