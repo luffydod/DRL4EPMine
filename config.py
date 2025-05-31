@@ -44,4 +44,4 @@ class PPOConfig:
     file_name: str = "MineField_Windows-0510-random/drl.exe" if platform.system() == "Windows" else "MineField_Linux-0510-random/drl.x86_64"
     port: int = 30001
     work_id: int = 0
-    time_scale: float = 20.0
+    time_scale: float = 20

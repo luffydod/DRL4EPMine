@@ -154,7 +154,8 @@ def test(args, config,
             render_mode="human",
             only_image=config.only_image,
             only_state=config.only_state,
-            time_scale=config.time_scale
+            time_scale=config.time_scale,
+            max_episode_steps=512,
         )
         
         obs, _= env.reset()
@@ -187,8 +188,11 @@ def test(args, config,
         done = False
         step = 0
         total_reward = 0
+        invalid_count = 0
         success_count = 0
         success_episode_length = []
+        success_episode_reward = 0
+        
         for i in range(test_episode):
             obs_list = []
             
@@ -220,15 +224,21 @@ def test(args, config,
             # 输出obs的分布信息
             obs_data = np.array(obs_list, dtype=np.float32)
             print(f"obs_data shape: {obs_data.shape}")
-            print(f"obs_data min: {obs_data.min()}, max: {obs_data.max()}, mean: {obs_data.mean()}, std: {obs_data.std()}")
+            print(f"obs_data min: {obs_data.min():.2f}, max: {obs_data.max():.2f}, mean: {obs_data.mean():.2f}, std: {obs_data.std():.2f}")
             
+            if total_reward < -5.0:
+                invalid_count += 1
+                
             if total_reward > 9.0:
                 success_count += 1
                 success_episode_length.append(step)
-            print(f"episode-{i}: 总奖励: {total_reward} 总步数: {step}")
+                success_episode_reward += total_reward
+            print(f"episode-{i}: 总奖励: {total_reward:.2f} 总步数: {step}")
         
-        print(f"成功次数: {success_count}, 成功率: {((success_count / test_episode) * 100):.2f}%")
-        print(f"成功回合平均步数: {np.mean(success_episode_length):.1f}")
+        print(f"无效回合数: {invalid_count}/{test_episode}")
+        print(f"成功次数: {success_count}, 成功率: {((success_count / (test_episode - invalid_count)) * 100):.2f}%")
+        print(f"成功回合平均步数: {np.mean(success_episode_length):.2f}")
+        print(f"成功回合平均奖励: {success_episode_reward / success_count:.2f}")
         
         if save_video:
             # 将收集的帧写入视频
