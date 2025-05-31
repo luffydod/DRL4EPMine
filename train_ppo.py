@@ -12,6 +12,8 @@ from config import PPOConfig
 
 from policy_network import CustomCnnPolicy, ResNetPolicy, NatureCnnproPolicy
 
+PPO_NAME = "ppo"
+
 ppo_policy = {
     'mlp': 'MlpPolicy',
     'cnn': 'CnnPolicy',
@@ -551,7 +553,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.action == "train":
-        train(args, config)
+        train(args, config, algorithm=PPO_NAME)
     elif args.action == "test":
         test(args, config, 
              test_episode=10, 
