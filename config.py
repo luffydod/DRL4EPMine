@@ -14,7 +14,7 @@ class PPOConfig:
     # PPO算法超参数
     learning_rate: float = 3e-4
     n_steps: int = 2048
-    batch_size: int = 64
+    batch_size: int = 128
     n_epochs: int = 10
     gamma: float = 0.99
     gae_lambda: float = 0.95
@@ -46,3 +46,7 @@ class PPOConfig:
     port: int = 30001
     work_id: int = 0
     time_scale: float = 100
+    # 是否使用帧堆叠
+    use_frame_stack: bool = False
+    # 帧堆叠的帧数
+    frame_stack_size: int = 4

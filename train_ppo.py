@@ -8,6 +8,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import VecFrameStack
 from sb3_contrib import RecurrentPPO
 
 from policy_network import (
@@ -16,7 +17,7 @@ from policy_network import (
     NatureCnnproPolicy,
 )
 
-PPO_NAME = "ppo_recurrent"
+PPO_NAME = "ppo"
 
 ppo_policy = {
     'mlp': 'MlpPolicy',
@@ -59,6 +60,10 @@ def train(args, config, algorithm="ppo"):
             }
         )
         
+        if config.use_frame_stack:
+            print(f"使用帧堆叠，堆叠帧数为: {config.frame_stack_size}")
+            env = VecFrameStack(env, n_stack=config.frame_stack_size)
+            
         # 添加 VecNormalize 包装器
         # env = VecNormalize(
         #     env,
