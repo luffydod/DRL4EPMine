@@ -14,6 +14,18 @@
 
 ## 环境配置
 
+### pip依赖整理
+
+```bash
+
+stable-baselines3[extra]
+
+mlagents-envs
+
+sb3-contrib
+
+```
+
 ### Windows端
 
 ```bash
@@ -37,7 +49,16 @@ File "/workspace/drl_ep/envs/singleAgent/mine_toy.py", line 9,
 apt install libgl1
 ```
 
-(2)
+(2) 使用xvfb用于无头训练
+
+```bash
+
+apt update && apt install -y xvfb
+
+# 运行方式
+xvfb-run python3 train_ppo.py
+
+```
 
 ```bash
 # error
