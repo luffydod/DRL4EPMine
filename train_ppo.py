@@ -75,9 +75,12 @@ def train(args, config, algorithm="ppo"):
         # )
         
         # 设置保存模型的回调
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(config.save_path, timestamp)
         checkpoint_callback = CheckpointCallback(
             save_freq=config.save_freq,
-            save_path=config.save_path,
+            save_path=save_path,
             name_prefix=f"{config.env_id}_{config.policy}"
         )
         

@@ -54,24 +54,18 @@ class ResNetFeaturesExtractor(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dim)
         
         self.resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
-        
-        # 冻结ResNet的所有参数
-        for param in self.resnet.parameters():
-            param.requires_grad = False
-            
+
+        # 将所有BatchNorm换成GroupNorm
+        for m in self.resnet.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m = nn.GroupNorm(32, m.num_features)
+
         # 移除最后的全连接层
-        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])
-        
-        # 添加一个新的全连接层，将ResNet的输出映射到所需的特征维度
-        self.linear = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(512, features_dim),  # ResNet18的输出特征维度是512
-            nn.ReLU()
-        )
-        
+        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1], nn.Flatten())
+
     def forward(self, observations):
-        return self.linear(self.resnet(observations))
-    
+        return self.resnet(observations)
+
 class ResNetPolicy(ActorCriticCnnPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__(
@@ -80,7 +74,6 @@ class ResNetPolicy(ActorCriticCnnPolicy):
             features_extractor_kwargs=dict(features_dim=512),
             **kwargs
         )
-
 # v1
 # class NatureCNNpro(BaseFeaturesExtractor):
     
