@@ -1,5 +1,7 @@
 # DRL4EPMine
 
+本项目作为强化学习-机器人视觉导航大作业，主要使用PPO（近端策略优化）算法来训练智能体在仿真矿场环境中进行视觉探索任务，包含了训练、测试和行为克隆等多种功能模块，支持不同的策略网络架构和训练方法。
+
 ## 任务描述
 
 在固定环境内，根据第一视角图像输入，找到指定目标。
@@ -10,7 +12,78 @@
 
 奖励：机器人到达指定位置会返回+10奖励，在`envs/SingleAgent/mine_toy.py`中设置了一种简易稠密奖励方式。
 
-对环境的测试可以参考`envs/SingleAgent/mine_toy.py`文件。
+注意：机器人如果出生点位置异常，如何操作都会提前终止并返回-10的奖励，我们在实际训练中尝试了两种解决思路：将-10的奖励置为0，忽略这种负奖励；改写PPO的收集数据方法，将包含-10的轨迹直接移除，认为这种异常翻车轨迹对训练没影响。
+
+## 运行说明
+
+```bash
+
+python train_ppo.py --help
+# 命令行参数
+
+options:
+  -h, --help            show this help message and exit
+  -d DEVICE, --device DEVICE
+                        训练设备 (auto, cpu, cuda)
+  -a ACTION, --action ACTION
+                        运行模式 (train, test, test_random,
+                        test_keyboard, collect_expert_data)
+  -mp MODEL_PATH, --model_path MODEL_PATH
+                        模型加载或者保存路径
+  -v, --video           是否保存视频 （将要弃用）
+```
+
+模型测试：
+
+```bash
+# 使用训练好的模型测试
+python train_ppo.py -a test -mp models/your_model_path
+
+# 随机动作测试
+python train_ppo.py -a test_random
+
+# 键盘控制测试
+python train_ppo.py -a test_keyboard
+
+```
+
+行为克隆训练：
+
+```bash
+# 使用专家数据进行行为克隆
+python bc_train.py --mode bc --expert_data_path expert_data/your_data.pkl
+
+# 使用专家模型生成数据并进行行为克隆
+python bc_train.py --mode bc_expert --expert_model_path models/expert_model.zip
+```
+
+键盘交互收集专家数据：
+
+```bash
+python train_ppo.py -a collect_expert_data
+```
+
+键盘控制说明：
+
+- `w`：向前移动
+- `s`：向后移动
+- `a`：向左移动
+- `d`：向右移动
+- `q`：左转
+- `e`：右转
+- `space`：不动
+- `ESC`：退出
+- `r`：手动重置环境
+- `y`: 保存当前回合的专家数据
+- `n`: 不保存当前回合的专家数据
+
+参数配置说明：
+在`config.py`中可以修改各种训练参数：
+
+- 环境相关配置：环境ID、环境数量、随机种子等
+- PPO算法超参数：学习率、步数、批量大小、折扣因子等
+- 训练相关配置：总步数、策略网络类型、日志路径等
+- 模型保存相关：保存路径、保存频率等
 
 ## 环境配置
 
@@ -69,9 +142,11 @@ chmod -R 775 MineField_Linux-0510-random/drl.x86_64
 
 ### docker记录
 
-容器创建，
-
 ```bash
+# 基于 novnc镜像
+docker pull crpi-c30rbdvbl28uwiva.cn-beijing.personal.cr.aliyuncs.com/luffydod/novnc:base
+
+# 容器创建
 docker run -itd \
   -p 50004:80 \
   --security-opt seccomp=unconfined \
@@ -112,12 +187,6 @@ chown $(whoami):$(whoami) /run/user/$(id -u)
 export XAUTHORITY=$HOME/.Xauthority
 
 # 【已解决】 添加到 ~/.bashrc
-```
-
-运行程序
-
-```bash
-python3 train_ppo.py
 ```
 
 ### 关闭可视化界面
