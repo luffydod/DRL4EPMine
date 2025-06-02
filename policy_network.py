@@ -170,3 +170,101 @@ class NatureCnnproPolicy(ActorCriticCnnPolicy):
             **kwargs
         )
         
+class SimpleResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+        
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, 
+                              stride=stride, padding=1, bias=False)
+        self.gn1 = nn.GroupNorm(num_groups=8, num_channels=out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3,
+                              stride=1, padding=1, bias=False)
+        self.gn2 = nn.GroupNorm(num_groups=8, num_channels=out_channels)
+        
+        # 添加下采样路径
+        self.downsample = None
+        if stride != 1 or in_channels != out_channels:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, 
+                         stride=stride, bias=False),
+                nn.GroupNorm(num_groups=8, num_channels=out_channels)
+            )
+        
+    def forward(self, x):
+        identity = x
+        
+        out = self.conv1(x)
+        out = self.gn1(out)
+        out = self.relu(out)
+        
+        out = self.conv2(out)
+        out = self.gn2(out)
+        
+        if self.downsample is not None:
+            identity = self.downsample(x)
+            
+        out += identity
+        out = self.relu(out)
+        
+        return out
+
+class SimpleResNetExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim=128):
+        super().__init__(observation_space, features_dim)
+        
+        n_input_channels = observation_space.shape[0]
+        
+        # 减小初始卷积核大小，降低参数量
+        self.conv1 = nn.Conv2d(n_input_channels, 32, kernel_size=5, stride=2, padding=2, bias=False)
+        self.gn1 = nn.GroupNorm(num_groups=8, num_channels=32)
+        self.relu = nn.ReLU(inplace=True)
+        
+        # 调整残差块结构
+        self.layer1 = SimpleResBlock(32, 64, stride=1)
+        self.layer2 = SimpleResBlock(64, 96, stride=2)
+        self.layer3 = SimpleResBlock(96, 128, stride=2)
+        
+        # 计算最终特征图大小
+        with th.no_grad():
+            sample = th.as_tensor(observation_space.sample()[None]).float()
+            x = self.conv1(sample)
+            x = self.gn1(x)
+            x = self.relu(x)
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            self.final_flatten_size = x.flatten(1).shape[1]
+        
+        # 改进全连接层，添加dropout防止过拟合
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(self.final_flatten_size, 256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, features_dim),
+            nn.ReLU()
+        )
+        
+    def forward(self, observations):
+        x = self.conv1(observations)
+        x = self.gn1(x)
+        x = self.relu(x)
+        
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        
+        x = self.fc(x)
+        
+        return x
+
+class SimpleResNetPolicy(ActorCriticCnnPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            features_extractor_class=SimpleResNetExtractor,
+            features_extractor_kwargs=dict(features_dim=512),  # 增加特征维度
+            **kwargs
+        )
+        

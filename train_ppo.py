@@ -15,6 +15,7 @@ from policy_network import (
     CustomCnnPolicy, 
     ResNetPolicy, 
     NatureCnnproPolicy,
+    SimpleResNetPolicy,
 )
 
 PPO_NAME = "ppo"
@@ -26,6 +27,7 @@ ppo_policy = {
     'resnet': ResNetPolicy,
     'cnn_pro': NatureCnnproPolicy,
     'lstm_cnn': "CnnLstmPolicy",
+    'resnet_mini': SimpleResNetPolicy,
 }
 
 def parse_args():
@@ -65,19 +67,20 @@ def train(args, config, algorithm="ppo"):
             env = VecFrameStack(env, n_stack=config.frame_stack_size)
             
         # 添加 VecNormalize 包装器
-        # env = VecNormalize(
-        #     env,
-        #     norm_obs=True,  # 不标准化图像观察
-        #     norm_reward=True,  # 标准化奖励
-        #     clip_reward=10.0,
-        #     gamma=config.gamma,
-        #     epsilon=1e-8
-        # )
+        env = VecNormalize(
+            env,
+            norm_obs=True,
+            norm_reward=True,  # 标准化奖励
+            clip_reward=10.0,
+            gamma=config.gamma,
+            epsilon=1e-8
+        )
         
         # 设置保存模型的回调
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = os.path.join(config.save_path, timestamp)
+        os.makedirs(save_path, exist_ok=True)
         checkpoint_callback = CheckpointCallback(
             save_freq=config.save_freq,
             save_path=save_path,
@@ -158,10 +161,14 @@ def train(args, config, algorithm="ppo"):
         )
         
         # 保存最终模型
-        final_model_path = os.path.join(config.save_path, f"{config.env_id}_{config.policy}_final")
+        final_model_path = os.path.join(save_path, f"{config.env_id}_{config.policy}_final")
         model.save(final_model_path)
         
+        # 保存VecNormalize统计数据
+        env_stats_path = os.path.join(save_path, f"{config.env_id}_{config.policy}_vecnorm.pkl")
+        env.save(env_stats_path)
         print(f"模型已保存至: {final_model_path}")
+        print(f"环境标准化统计数据已保存至: {env_stats_path}")
     except KeyboardInterrupt:
         print("运行中断，正在关闭环境")
     finally:
@@ -178,6 +185,55 @@ def test(args, config,
         import time
         import numpy as np
         
+        if not random_action and args.model_path:
+            # 检查是否存在对应的VecNormalize统计数据
+            env_stats_path = args.model_path + "_vecnorm.pkl"
+            use_vecnorm = os.path.exists(env_stats_path)
+            
+            if use_vecnorm:
+                print(f"找到环境标准化统计数据: {env_stats_path}")
+                # 创建向量化环境用于标准化
+                vec_env = make_vec_env(
+                    config.env_id, 
+                    n_envs=1, 
+                    seed=config.seed, 
+                    vec_env_cls=DummyVecEnv,
+                    env_kwargs={
+                        "file_name": config.file_name,
+                        "no_graph": True,
+                        "only_image": config.only_image,
+                        "only_state": config.only_state,
+                        "discrete_action": True,
+                        "max_episode_steps": 512,
+                    }
+                )
+                
+                if config.use_frame_stack:
+                    vec_env = VecFrameStack(vec_env, n_stack=config.frame_stack_size)
+                
+                # 加载保存的标准化统计数据
+                vec_env = VecNormalize.load(env_stats_path, vec_env)
+                # 测试时不更新标准化统计数据
+                vec_env.training = False
+                vec_env.norm_reward = False
+                
+                # 加载PPO模型
+                if algorithm == "ppo":
+                    model = PPO.load(args.model_path, env=vec_env)
+                elif algorithm == "ppo_custom":
+                    model = FilteredPPO.load(args.model_path, env=vec_env)
+                elif algorithm == "ppo_recurrent":
+                    model = RecurrentPPO.load(args.model_path, env=vec_env)
+            else:
+                print("未找到环境标准化统计数据，将直接加载模型")
+                # 加载PPO模型
+                if algorithm == "ppo":
+                    model = PPO.load(args.model_path)
+                elif algorithm == "ppo_custom":
+                    model = FilteredPPO.load(args.model_path)
+                elif algorithm == "ppo_recurrent":
+                    model = RecurrentPPO.load(args.model_path)
+        
         # 创建环境
         env = EpMineEnv(
             file_name=config.file_name,
@@ -191,7 +247,7 @@ def test(args, config,
             max_episode_steps=512,
         )
         
-        obs, _= env.reset()
+        obs, _ = env.reset()
         
         if save_video:
             import cv2 as cv
@@ -203,14 +259,6 @@ def test(args, config,
             video_writer = cv.VideoWriter(f"{video_path}/simulation_hd.mp4", fourcc, 30.0, (width, height))
         
         if not random_action:
-            # 加载PPO模型
-            if algorithm == "ppo":
-                model = PPO.load(args.model_path, env=env)
-            elif algorithm == "ppo_custom":
-                model = FilteredPPO.load(args.model_path, env=env)
-            elif algorithm == "ppo_recurrent":
-                model = RecurrentPPO.load(args.model_path, env=env)
-            
             # set eval
             model.policy.set_training_mode(False)
             
@@ -241,7 +289,12 @@ def test(args, config,
                 if random_action:
                     action = env.action_space.sample()
                 else:
-                    action, _state = model.predict(obs, deterministic=True)
+                    # 如果使用VecNormalize，需要对观察进行标准化
+                    if use_vecnorm:
+                        obs_normalized = vec_env.normalize_obs(obs)
+                        action, _state = model.predict(obs_normalized, deterministic=True)
+                    else:
+                        action, _state = model.predict(obs, deterministic=True)
                     
                 next_obs, reward, terminated, truncated, info = env.step(action)
                 obs = next_obs.copy()
