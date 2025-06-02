@@ -8,6 +8,15 @@
 ```
 
 
+* 
+```PPO_resnet_freeze_l12_groupnorm
+无效回合数: 9/100
+成功次数: 74, 成功率: 81.32%
+成功回合平均步数: 55.01
+成功回合平均奖励: 11.64
+```
+
+
 
 * PPO_resnet_freeze_l123_batchnorm
 
@@ -18,6 +27,24 @@
 成功回合平均奖励: 11.62
 ```
 
+
+* PPO_resnet_freeze_none_groupnorm
+
+```
+无效回合数: 5/100
+成功次数: 92, 成功率: 96.84%
+成功回合平均步数: 48.28
+成功回合平均奖励: 11.63
+```
+
+
+* PPO_drop_vecnorm_resnet_mini_discrete(fullmax)-50w
+```
+无效回合数: 6/100
+成功次数: 87, 成功率: 92.55%
+成功回合平均步数: 43.90
+成功回合平均奖励: 11.62
+```
 
 
 * raw-cnnprov2-discrete(fullmax)-50w
