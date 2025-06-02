@@ -186,12 +186,13 @@ def test(args, config,
         import numpy as np
         
         if not random_action and args.model_path:
-            # 检查是否存在对应的VecNormalize统计数据
-            env_stats_path = args.model_path + "_vecnorm.pkl"
-            use_vecnorm = os.path.exists(env_stats_path)
+            # 判断同级目录下是否存在pkl文件
+            model_dir = os.path.dirname(args.model_path)
+            pkl_files = [f for f in os.listdir(model_dir) if f.endswith('.pkl')]
+            use_vecnorm = len(pkl_files) > 0
             
             if use_vecnorm:
-                print(f"找到环境标准化统计数据: {env_stats_path}")
+                print(f"找到环境标准化统计数据: {pkl_files[0]}")
                 # 创建向量化环境用于标准化
                 vec_env = make_vec_env(
                     config.env_id, 
@@ -212,7 +213,7 @@ def test(args, config,
                     vec_env = VecFrameStack(vec_env, n_stack=config.frame_stack_size)
                 
                 # 加载保存的标准化统计数据
-                vec_env = VecNormalize.load(env_stats_path, vec_env)
+                vec_env = VecNormalize.load(os.path.join(model_dir, pkl_files[0]), vec_env)
                 # 测试时不更新标准化统计数据
                 vec_env.training = False
                 vec_env.norm_reward = False
@@ -654,7 +655,7 @@ if __name__ == "__main__":
         train(args, config, algorithm=PPO_NAME)
     elif args.action == "test":
         test(args, config, 
-             test_episode=10, 
+             test_episode=100, 
              no_graph=False, 
              save_video=args.video, 
              random_action=False)
